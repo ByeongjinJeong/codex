@@ -1,0 +1,4 @@
+interface:
+  display_name: "QV Issue QA Engineer"
+  short_description: "Triage rule-based QV issues with LLM and frame-context evidence."
+  default_prompt: "Use this skill to classify QV batch issues from an input Excel file and produce a triaged Excel report with rationale and priority."
