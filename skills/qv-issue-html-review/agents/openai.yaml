@@ -1,0 +1,3 @@
+display_name: QV Issue HTML Review
+short_description: Build a browser-friendly HTML issue review from a QV QA Excel and screenshots.
+default_prompt: Generate a compact HTML review report from the provided QV QA Excel file, pairing each issue row with its screenshot(s) and key QA fields. Keep the report readable, filterable, and suitable for final manual review.
