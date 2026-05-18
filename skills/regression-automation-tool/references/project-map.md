@@ -67,6 +67,15 @@ This reference is for the `Regression_automation_tool` repository.
   - Shared interface/signal/config mappings.
   - Contains AVI and COMMON interface mappings for OD, LD/RBD, TS, TL, and RMD.
   - Contains output templates and evaluation thresholds used by reference/rule functions.
+  - Important ICS bbox mappings:
+    - OD raw object image coordinates live under `VIS_OBJ_Image_Coordinates` and map to preprocessed keys such as `Back_Top_L_X`, `Back_Top_L_Y`, `Back_Bottom_R_X`, and `Back_Bottom_R_Y`.
+    - TS/TL/RMD_SM debug rectangles use raw `DBG_Rect_Top_X`, `DBG_Rect_Top_Y`, `DBG_Rect_Bottom_X`, `DBG_Rect_Bottom_Y`, then preprocess to `DBG_TOP_X`, `DBG_TOP_Y`, `DBG_BOTTOM_X`, `DBG_BOTTOM_Y`.
+- `Function Script/Pre_process_parse_match.py`
+  - Matching behavior for manual ICS bbox references:
+    - `OD` matching uses polygons from object image-coordinate point keys.
+    - `TS`, `TL`, and `RMD_SM` share `_parse_ts_tl`, which matches reference/current detections with IoU over `[DBG_TOP_X, DBG_TOP_Y, DBG_BOTTOM_X, DBG_BOTTOM_Y]`.
+    - `RMD_SL` matching uses `SL_Lat_Dist_L`, `SL_Long_Dist_L`, `SL_Lat_Dist_R`, `SL_Long_Dist_R`, not image pixels.
+    - TS/TL bbox IoU threshold comes from `CRITERIA_BBOX_IOU_TS_TL`.
 
 ## Rule And Reference Function Areas
 

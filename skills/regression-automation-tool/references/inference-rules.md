@@ -46,6 +46,51 @@ Do not rely only on Jira wording, `USER_HINT`, or a similar issue row for the ex
 
 If the user's approximate signal appears under a different raw JSON name, use the canonical preprocessed key expected by the rule and note the alias. If the inferred final signal is not present in raw JSON, config aliases, or preprocessed output, stop before adding a guessed mapping: leave the request `검토중` and write the missing signal evidence in `CODEX_RESULT`.
 
+## Manual ICS BBox Reference Creation
+
+Use this when the user says there is no usable reference/GT and provides object rectangle coordinates, or asks to create a reference from an object bbox shown in ICS.
+
+Core principles:
+
+- Run `Extract_Reference.py` first whenever a `Reference Management` row is used. This preserves the tool's frame filtering and output directory behavior.
+- Patch only the generated `filter_json` files after extraction.
+- Treat user-provided rect coordinates as ICS image-space pixel coordinates unless the user says they are BEV/world coordinates.
+- Do not invent a new coordinate transform when both source and target are ICS debug rectangles. In this codebase, OD `VIS_OBJ_Image_Coordinates.Rect_*` and TS/TL/RMD_SM `DBG_Rect_*` are all image-space rectangle coordinates.
+- Preserve the user's intended rectangle semantics. If the user provides a specific corner pair, map that pair directly. Do not replace it with `min/max` over all corners unless the user asks for an enclosing envelope.
+- Create one reference object per user-specified rectangle. Do not split one object rectangle into left/right lights, signs, or sub-regions unless explicitly requested.
+- Store the conversion decision in `CODEX_ANALYSIS_LOG` under `[Signal 검증]` or `[Criteria 선정 근거]`, including source raw keys and target feature keys.
+
+Feature-specific ICS bbox targets:
+
+- `OD` uses 3D/image polygon fields in preprocessed output:
+  - Source raw object image coordinates are under `VIS_OBJ_Image_Coordinates`.
+  - Canonical preprocessed keys include `Back_Top_L_X`, `Back_Top_L_Y`, `Back_Top_R_X`, `Back_Top_R_Y`, `Back_Bottom_L_X`, `Back_Bottom_L_Y`, `Back_Bottom_R_X`, `Back_Bottom_R_Y`, and front equivalents.
+  - OD matching uses polygons built from these point keys, not `DBG_Rect_*`.
+- `TS`, `TL`, and `RMD_SM` use debug rectangle fields:
+  - Preprocessed keys: `DBG_TOP_X`, `DBG_TOP_Y`, `DBG_BOTTOM_X`, `DBG_BOTTOM_Y`.
+  - Raw debug keys: `DBG_Rect_Top_X`, `DBG_Rect_Top_Y`, `DBG_Rect_Bottom_X`, `DBG_Rect_Bottom_Y`.
+  - `Pre_process_parse_match._parse_ts_tl` computes IoU from `[DBG_TOP_X, DBG_TOP_Y, DBG_BOTTOM_X, DBG_BOTTOM_Y]`.
+  - TS/TL IoU threshold is `Config_setting.CRITERIA_BBOX_IOU_TS_TL`.
+- `RMD_SL` is not an ICS pixel rectangle in the current parser:
+  - Matching uses `SL_Lat_Dist_L`, `SL_Long_Dist_L`, `SL_Lat_Dist_R`, `SL_Long_Dist_R`.
+  - Do not convert object pixel rects to RMD_SL lat/long values without a feature-specific transform or user confirmation.
+- `LD` / `RBD` lane references use lane/road-edge geometry and role/lane positions, not ICS pixel rectangles.
+
+Common OD-object to TS/TL/RMD_SM virtual-reference pattern:
+
+1. Locate the requested OD object in the original JSON for each filtered frame, normally by `VIS_OBJ_ID`.
+2. Read `VIS_OBJ_Image_Coordinates`.
+3. If the user wants the object's rear face, map exactly:
+   - `Rect_Back_Top_Left_X` -> `DBG_Rect_Top_X`
+   - `Rect_Back_Top_Left_Y` -> `DBG_Rect_Top_Y`
+   - `Rect_Back_Bottom_Right_X` -> `DBG_Rect_Bottom_X`
+   - `Rect_Back_Bottom_Right_Y` -> `DBG_Rect_Bottom_Y`
+4. If the user wants another face or a custom rectangle, use the exact source keys or explicit coordinates they provided.
+5. Create one feature object with a stable synthetic ID, such as `101`, and one matching debug element with the same ID.
+6. Keep original user JSON/video paths unchanged in `Issue_Request_aptiv.xlsx`.
+
+Never assume these conversions are correct without checking at least one debug image when a video path is available. Generate a quick debug overlay that shows the created reference bbox and whether current JSON has a matched object.
+
 ## Feature Hints
 
 - `TSR`, `traffic sign`, `sign`, `speed limit` -> `TS`
@@ -86,6 +131,19 @@ Generate or configure reference JSON for target matching when:
 - Track ID/lane is central to evaluation.
 - The user supplies or can clearly infer a frame range and track ID/lane for reference extraction.
 - A close precedent has paired `Reference Management` rows for the same type of target selection.
+
+For TL false-positive requests that use an OD object rear face as a virtual TL reference:
+
+- Run `Extract_Reference.py` first so only the requested issue frames are filtered into `filter_json`.
+- Then patch only the generated `filter_json` files.
+- Read the requested OD `VIS_OBJ_ID` from the original JSON frame and use its `VIS_OBJ_Image_Coordinates`.
+- Create exactly one TL reference object unless the user explicitly asks for multiple lights.
+- Map the OD rear-face coordinates directly into TL debug coordinates when that is the user intent:
+  - `Rect_Back_Top_Left_X` -> `DBG_Rect_Top_X`
+  - `Rect_Back_Top_Left_Y` -> `DBG_Rect_Top_Y`
+  - `Rect_Back_Bottom_Right_X` -> `DBG_Rect_Bottom_X`
+  - `Rect_Back_Bottom_Right_Y` -> `DBG_Rect_Bottom_Y`
+- Do not use a min/max envelope over all four rear-face corners unless the user explicitly requests a bounding envelope. The object may be tilted or partly out of image, and min/max can over-expand the TL reference.
 
 Keep the final method as `Rule base` after target matching unless direct reference comparison is explicitly required and valid GT/reference criteria are available.
 
@@ -140,6 +198,23 @@ Recommended Rule base mappings:
   - range -> `['ld.LD_RBD_RANGE', (<range>, '<more than|less than>')]`
   - C0/C1/C2 -> matching `ld.LD_RBD_C0`, `ld.LD_RBD_C1`, `ld.LD_RBD_C2`, or `ld.LD_RBD_C1_C2`
   - polynomial combinations -> `ld.LD_RBD_CPP` when examples match the required tuple shape
+
+For every LD/RBD rule that evaluates polynomial coefficient ranges, do not reuse a broad precedent range blindly. Build criteria from the request row's actual JSON output for the requested frame range and lane/road-edge target:
+
+- Applies to `ld.LD_RBD_Localization`, `ld.LD_RBD_CPP`, `ld.LD_RBD_C0`, `ld.LD_RBD_C1_C2`, `ld.LD_RBD_C1`, and `ld.LD_RBD_C2`.
+- Read the selected target lanes from the raw JSON path and frame range:
+  - LD host/adjacent lanes: `avi_lanes_host` / `avi_lanes_adjacent` -> `VIS_LH_Element` / `VIS_LA_Element` -> `VIS_LH_Boundary` / `VIS_LA_Boundary` -> `First_Segment.Polynom`.
+  - RBD road edges: `avi_lanes_road_edge` -> `VIS_LRE_Element` -> `VIS_LRE_Boundary` -> `First_Segment.Polynom`.
+  - CPP/path prediction rules: inspect the actual CPP/path-prediction output used by the parser, not lane-boundary C0-C3, before selecting `LD_RBD_CPP`.
+- Map lane roles using the existing extractor/parser role enums (`L`, `R`, `LL`, `RR`, `L1`, `R1`, etc.) and aggregate values only for the requested target(s).
+- Set each coefficient range from observed min/max with a small margin. A practical default is 20% of the observed span, with a minimum margin suitable for the coefficient scale:
+  - C0: at least `0.1`
+  - C1: at least `0.001`
+  - C2: at least `0.0001`
+  - C3: at least `0.000001`
+- Keep signs when the observed range is signed. Do not convert to an all-positive absolute range if the rule supports signed min/max tuples.
+- Record observed min/max, chosen margin, and final tuple in `CODEX_ANALYSIS_LOG` under `[Signal 검증]` and `[Criteria 선정 근거]`.
+- If the relevant coefficient values cannot be found for the requested target, mark the request `검토중` rather than falling back to a generic range.
 
 Recommended Reference issue types:
 
@@ -196,6 +271,8 @@ Examples:
 - OD/LD numeric thresholds must be copied from a close row or asked for.
 
 If a threshold affects pass/fail semantics and no close precedent exists, ask instead of guessing.
+
+Exception for LD/RBD polynomial coefficient range thresholds: when the user says the current JSON output is normal and should be used as the passing baseline, derive the threshold from the current JSON output for that request's exact frame range and target lane/road edge. Similar issues may define the rule shape, but the actual numeric range must come from the request JSON.
 
 ## When Code Edits Are Allowed
 

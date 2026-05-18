@@ -57,6 +57,7 @@ Do not ask the user to run a CLI. If a helper script exists later, treat it as a
    - Treat user-provided feature/signal wording as approximate hints; the user may not know the exact JSON key.
    - Confirm the final signal name written into the rule criteria exists in raw JSON, `Config/Config_setting.py` aliases, or preprocessed output.
    - If the inferred final signal cannot be found in the actual JSON/preprocessed output, mark the row `검토중` and explain the missing signal instead of guessing.
+   - For LD/RBD polynomial range rules (`LD_RBD_Localization`, `LD_RBD_CPP`, `LD_RBD_C0`, `LD_RBD_C1_C2`, `LD_RBD_C1`, `LD_RBD_C2`), derive numeric criteria from the request row's actual JSON output for the requested frame range and target lane/road edge. Similar issues may define the rule shape, but do not reuse their numeric range unless the actual JSON output supports it.
 5. Infer the regression setup:
    - feature
    - final method, normally `Rule base`
@@ -64,11 +65,17 @@ Do not ask the user to run a CLI. If a helper script exists later, treat it as a
    - data attributes
    - reference JSON generation need for target matching
    - rule mapping or code changes
+   - whether manual ICS bbox reference patching is needed because no GT/reference exists
 6. Ask only for missing information that cannot be inferred safely.
 7. Apply changes only after understanding current user edits and expected impact.
 8. If reference rows were added or remain `NOT READY`, run `python Extract_Reference.py` and use the generated target-matching reference output path.
-9. If input/config changes are complete and paths are accessible, run `python Execute_TC.py` to verify the regression setup.
-10. Verify and summarize changed files.
+9. If manual bbox reference patching is needed, patch only the generated `filter_json` files after `Extract_Reference.py`:
+   - map user/object ICS rect coordinates to the target feature's parser keys
+   - preserve the user's rectangle semantics
+   - create one reference object per supplied rectangle unless explicitly told otherwise
+   - generate a debug overlay when a video path is available
+10. If input/config changes are complete and paths are accessible, run `python Execute_TC.py` to verify the regression setup.
+11. Verify and summarize changed files.
 
 ## Issue Request Workbook Workflow
 
