@@ -2,6 +2,15 @@
 
 Use this guidance when judging QV rule-detected issues.
 
+## ADAS/AD Control Impact And SOTIF Perspective
+- Judge each row from both ADAS/AD control-impact and SOTIF perspectives.
+- SOTIF means safety risk caused by intended-function limitations or perception performance limits even when there is no component failure.
+- A QV issue is more important when the perception output can plausibly affect FCW/AEB/ACC target selection, TTC/risk estimation, cut-in gating, lane relevance, trajectory prediction, path planning, or driver/vehicle response.
+- Explain the expected impact path, not only the visual fact. For example: "횡거리 jump로 인접차선 객체가 cut-in 후보처럼 보일 수 있어 ACC/AEB target selection에 영향 가능".
+- If the issue is real or low-priority, state the severity nature: immediate collision/control risk, important SOTIF-relevant perception weakness, potential reportable perception instability, or customer-visible cleanup concern.
+- If it is not an issue, explain why ADAS/AD control impact and SOTIF relevance are low, such as clear Road Edge/median separation, non-drivable area, parked/static object outside ego path, or low-speed/parking context.
+- Do not require a confirmed accident scenario. Plausible control-impact or SOTIF-relevant perception limitation can justify P1-P3 reporting.
+
 ## Routing Policy
 - Use `uncertain-only` routing by default to save tokens and latency.
 - Send rows to LLM only when the evidence is ambiguous: TTC or lateral offset is near the boundary, ROI relevance is unclear, heading-related behavior is involved, tracking continuity is unstable, or image interpretation is needed.
@@ -17,6 +26,12 @@ Use this guidance when judging QV rule-detected issues.
 - Treat P4 as currently not an issue but still a customer-visible quality concern or long-term cleanup item. Examples include very far objects around or beyond 120 m, objects beyond guardrail/Road Edge, or cases that are unlikely to affect current control but may be challenged by a customer.
 - Treat P5 as not a problem and not meaningful to report.
 - Adjacent-position issues should be prioritized conservatively. If the object is close to ego or adjacent lane and the signal jump is lateral distance or lateral velocity, consider higher priority than a pure longitudinal distance jump because lateral instability can affect lane relevance, cut-in prediction, and target selection more directly.
+- Priority must reflect severity and impact path:
+  - P1: severe SOTIF/control-impact risk, such as near-field ego-path/CIPV/VRU or adjacent-lane instability that can plausibly trigger wrong braking/avoidance or severe target-selection malfunction.
+  - P2: important SOTIF-relevant issue that can affect FCW/AEB/ACC, cut-in gating, TTC/risk estimation, or trajectory prediction but is not clearly immediate/severe.
+  - P3: potential but reportable perception weakness with uncertain or limited immediate control impact.
+  - P4: not a current issue, but customer-visible cleanup or robustness concern.
+  - P5: no meaningful ADAS/AD control or SOTIF relevance.
 
 ## Ego Path And Drivable Relevance
 - A near-field object with severe TTC is not automatically a high-priority issue.

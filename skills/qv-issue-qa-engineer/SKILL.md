@@ -29,7 +29,11 @@ description: >-
 - heading-related rows, boundary TTC rows, ROI-unclear rows, or low-confidence rows are sent to Codex
 5. Ask Codex CLI to read the context JSON and write a result JSON file.
 6. When screenshots are attached, ask Codex CLI to interpret OD/LD/TS/TL/SOD/FSD/LiDAR overlays using the QV image legend.
-7. Generate a reviewer-friendly Excel with Korean result columns and Korean QA narrative text.
+7. Judge final label and priority from ADAS/AD control-impact and SOTIF perspectives:
+- whether the issue can affect FCW/AEB/ACC target selection, TTC/risk estimation, cut-in gating, lane relevance, trajectory prediction, path planning, or driver/vehicle response
+- whether the case shows an intended-function/perception limitation even without component failure
+- what severity/impact path makes the issue P1-P5
+8. Generate a reviewer-friendly Excel with Korean result columns and Korean QA narrative text.
 
 ## Command
 ```powershell
@@ -57,7 +61,7 @@ Default model: `gpt-5.4-mini`
 - `Long Distance [m]`, `Lateral Distance [m]`, `TTC [s]`, `Absolute Longitudinal Velocity [m/s]`, `Absolute Lateral Velocity [m/s]`: key OD signals for quick scanning
 - `Issue Signal`: inferred or original problematic signal
 - `이미지판단`: image-based judgment when screenshot is attached
-- `최종판단`: final QA explanation
+- `최종판단`: final QA explanation, including ADAS/AD control impact, SOTIF relevance, severity, and expected impact path when applicable
 - `비이슈사유`: required when final decision is not an issue
 - `권고조치`: next QA action
 - `Routing Reason`: why the row was auto-resolved or sent to LLM

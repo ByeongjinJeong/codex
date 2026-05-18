@@ -241,6 +241,11 @@ def _build_context(repo_root: Path, log_path: Any, frame: Any, object_id: Any) -
             "obj_niv_r_id": (curr_frame or {}).get("obj_niv_r_id"),
             "obj_vd_cnt": (curr_frame or {}).get("obj_vd_cnt"),
             "obj_vru_cnt": (curr_frame or {}).get("obj_vru_cnt"),
+            "com_highway_flag": (curr_frame or {}).get("com_highway_flag"),
+            "com_road_type": (curr_frame or {}).get("com_road_type"),
+            "com_region": (curr_frame or {}).get("com_region"),
+            "is_highway": (curr_frame or {}).get("is_highway"),
+            "vehicle_speed_kph": (curr_frame or {}).get("vehicle_speed") or (curr_frame or {}).get("speed") or (curr_frame or {}).get("V"),
         },
         "objects_count": len(curr_objects),
         "target_object_prev": _object_snapshot(prev_frame, object_id),
@@ -854,6 +859,9 @@ Use this compact guidance for this row only. Judge as an ADAS/AD camera percepti
 
 ## Common
 - Judge whether the rule-detected issue can affect ADAS/AD control logic, not only whether the rule condition fired.
+- Use a SOTIF perspective: judge whether intended-function/perception limitations can create safety risk even without component failure.
+- Explain the ADAS/AD impact path when applicable: FCW/AEB/ACC target selection, TTC/risk estimation, cut-in gating, lane relevance, trajectory prediction, path planning, or driver/vehicle response.
+- Explain severity in the final reasoning: immediate control/collision risk, important SOTIF-relevant perception weakness, potential reportable perception instability, customer-visible cleanup concern, or no meaningful control/SOTIF relevance.
 - Report plausible perception risks, not only confirmed defects. P1-P3 are reportable issues, P4 is a customer-visible cleanup concern that is not a current issue, and P5 is not a problem.
 - P1 means severe near-field CIPV, near-field VRU, or adjacent-lane control-malfunction risk. Do not make long-range CIPV P1 by role alone.
 - P2 means important NIV/adjacent-lane/near-field issue with plausible FCW/AEB/ACC, cut-in, TTC, target-selection, or trajectory-prediction impact.
@@ -866,6 +874,8 @@ Use this compact guidance for this row only. Judge as an ADAS/AD camera percepti
 - If the same target is parked/stationary but still adjacent and close, downgrade only to P3 unless there is clear non-crossable Road Edge/median/barrier separation.
 - Only clear Road Edge line, median, barrier, or other non-crossable obstacle between ego and target can justify P4/P5 or non-issue for close adjacent-lane dynamic jumps.
 - If the object heading/orientation points toward the host lane or ego path, raise priority because cut-in prediction and trajectory gating can become unstable.
+- Consider road and traffic context from JSON and image. Highway/high-speed-road or visually high-speed situations should raise the severity of close object instability; parking lots, stopped traffic, low-speed urban congestion, or clearly slow maneuvering can lower severity when ego-control impact is limited.
+- Do not infer host speed from image alone when JSON/CAN speed is unavailable. Use image scene type as supporting context and explain uncertainty.
 - FSD/free-space is only supporting context. Do not use FSD termination alone as a downgrade reason because FSD can naturally stop at vehicles, pedestrians, or obstacles.
 - Write concise Korean explanations with concrete values when available.
 """.strip()
@@ -933,13 +943,34 @@ def _focused_image_legend(review_context: dict[str, Any]) -> str:
     common = """
 # Focused QV FVC Image Legend
 
-- Left side: original camera/ICS with JSON perception drawings and optional LiDAR drawings.
-- Right side: BEV generated from logs.
-- Yellow rectangle in ICS and yellow circle in BEV indicate the target issue object when available.
-- Use ICS for visibility, occlusion, edge-of-FOV, and box quality.
-- Use BEV for longitudinal/lateral position, ego path, green Road Edge line/median separation, adjacent lane, and non-drivable area.
-- FSD/free-space is supporting context only; it can stop at objects or pedestrians and should not be used alone to dismiss an issue.
-- If the yellow highlight appears mis-synced, mention capture/target-sync risk and rely more on parsed JSON.
+## Layout And Target
+- Left side is original camera/ICS; right side is BEV.
+- Yellow rectangle in ICS and yellow circle in BEV indicate the issue target when available.
+- First match the target by row id/object id/class text and yellow highlight. If the highlight looks wrong, report target-sync risk and rely more on parsed JSON.
+
+## BEV Reference
+- The blue rectangle near the bottom center is the host/ego vehicle.
+- The BEV grid is 5 meters per cell.
+- Use the blue ego box as the reference for ego path, longitudinal distance, lateral offset, and control relevance.
+- For OD objects, JSON `long_dist`/`lat_dist` correspond to the white rear-center point on the BEV object box, not the visual box center.
+- For issue targets, the yellow BEV circle is usually on or near this same rear-center reference point.
+
+## Numeric Sources
+- Use parsed JSON as the primary source for exact distance, velocity, TTC, heading, object id, class, lane assignment, existence probability, and signal deltas.
+- Use parsed JSON `heading` together with BEV rotated-box orientation to judge object direction, cut-in/crossing/oncoming relevance, and movement toward or away from the host lane.
+
+## Visual Sources
+- Use ICS for visibility, occlusion, edge-of-FOV, object-box quality, and road-scene context.
+- Use BEV for ego-path relevance, lateral/longitudinal position, adjacent-lane relevance, Road Edge/median/barrier separation, and non-drivable-area judgment.
+- Lane and Road Edge detections appear in both ICS and BEV. Road Edge is always a green line. Normal lanes use the detected lane color, so a detected white lane is drawn as a white line.
+- Distinguish the green Road Edge line from the semi-transparent green FSD/free-space area. Road Edge is a boundary cue; FSD is only supporting context and can stop at objects or pedestrians.
+- Use road-scene context from ICS/BEV and JSON road flags when available: highway/high-speed road, arterial/city road, intersection, underpass/bridge shadow, parking lot, stopped traffic, congestion, or low-speed maneuvering.
+- Do not estimate exact host speed from the image alone. If JSON/CAN speed is unavailable, describe the scene as visual context only.
+
+## Judgment Rule
+- Final judgment must combine JSON object values with screenshot context to decide real issue / low-priority issue / non-issue and priority.
+- Downgrade strongly only when Road Edge, median, barrier, curb, or another non-crossable separation clearly removes ego-control relevance.
+- Raise priority when the same close-object instability occurs on a highway/high-speed-road or visually high-speed scene. Lower priority when the scene is a parking lot, traffic jam, or low-speed maneuvering context and the object is not control-critical.
 """.strip()
     sections = {
         "od_ttc": """
@@ -989,12 +1020,12 @@ def _expected_result_schema() -> dict[str, Any]:
         "final_decision": "실제 이슈 | 우선순위 낮은 이슈 | 이슈 아님 | 판단 보류",
         "priority_1_to_5": 1,
         "confidence_0_to_1": 0.0,
-        "issue_summary": "예: 종방향 거리 오차가 4.8m 발생한 LiDAR distance 이슈",
+        "issue_summary": "예: 종방향 거리 오차가 4.8m 발생해 ACC/AEB target selection에 영향 가능",
         "rule_trigger_basis": "예: Long Error=4.8m, JSON long=22.1m, LiDAR long=26.9m",
-        "referenced_data": "예: ego path 관련성, 종거리, 횡거리, LiDAR 대비 오차, TTC",
-        "image_observation": "예: BEV에서 ego path와 겹침",
-        "final_reasoning": "예: 자차 경로에서 멀고 횡방향 오프셋이 커서 안전 영향은 낮지만 거리 오차 자체는 재현되어 저우선 이슈",
-        "non_issue_reason": "예: ego path와 분리되어 이슈 아님",
+        "referenced_data": "예: ego path 관련성, 종거리, 횡거리, TTC, heading, road context",
+        "image_observation": "예: BEV에서 ego path와 겹치며 Road Edge 분리 근거 없음",
+        "final_reasoning": "예: SOTIF 관점에서 인식 거리 불안정이 TTC/risk estimation과 ACC/AEB target selection에 영향을 줄 수 있어 P2로 판단",
+        "non_issue_reason": "예: Road Edge/median으로 ego path와 명확히 분리되어 ADAS/AD 제어 영향 및 SOTIF 관련성이 낮음",
         "recommended_action": "예: 즉시 재검토",
         "data_gaps": "예: 이미지나 차선 정보가 불명확함",
     }
@@ -1105,10 +1136,14 @@ Important:
 - Use the QV parsed context and attached image when available.
 - Use the QV FVC image legend to interpret OD/LD/TS/TL/SOD/FSD/LiDAR overlays, labels, colors, and yellow target highlights.
 - Be specific about which values/signals caused the issue and which values affected your final judgment.
+- Include ADAS/AD control-impact reasoning in final_reasoning: FCW/AEB/ACC target selection, TTC/risk estimation, cut-in gating, lane relevance, trajectory prediction, path planning, or driver/vehicle response when relevant.
+- Include SOTIF perspective in final_reasoning: whether this is an intended-function/perception limitation risk even without component failure.
+- Explain the severity nature behind priority: immediate control/collision risk, important SOTIF-relevant perception weakness, potential reportable perception instability, customer-visible cleanup concern, or no meaningful ADAS/AD control/SOTIF relevance.
 - For LiDAR distance issues, explicitly name Long Error or Lat Error, include JSON value, LiDAR value, and error magnitude.
 - For LiDAR FN issues, do not discuss Signal Delta vs LiDAR; explain the missed-object evidence and whether occlusion, road edge, ego-path relevance, or range lowers priority.
 - Explain why the final priority was raised or lowered using ego path relevance, lateral offset, distance, object type, visibility, and safety impact.
 - Use this reporting scale: P1 severe issue; P2 important issue; P3 potential but reportable issue; P4 not a current issue but customer-visible cleanup concern; P5 not a problem.
+- Map that scale to SOTIF/control impact: P1 severe control/SOTIF risk, P2 important SOTIF-relevant control-impact risk, P3 potential reportable perception weakness, P4 cleanup/robustness concern, P5 no meaningful problem.
 - For near-field adjacent-lane distance, velocity, or heading jumps, use P2 when longitudinal distance is within 20 m.
 - Treat close lateral distance or lateral velocity jumps more severely than pure longitudinal jumps when they can affect lane relevance, cut-in prediction, or target selection.
 - Parked/stationary close adjacent-lane targets should usually be P3, not P5, because distance jumps can still affect TTC and target selection.
