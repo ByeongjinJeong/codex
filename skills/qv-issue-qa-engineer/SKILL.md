@@ -16,6 +16,7 @@ description: >-
 - `utils/aptiv/aptiv_mapping_config.py`
 3. Build a compact issue context containing:
 - original rule trigger data from Excel
+- QV-exported `*_issue_context.json` sidecar data when present (`issue_context_key`, `issue_context_path`)
 - target object data from `frame-1`, `frame`, `frame+1`
 - CIPV/NIV header values
 - key OD signal columns such as long distance, lateral distance, TTC, relative velocity, existence probability, and lane assignment
@@ -79,6 +80,12 @@ Default model: `gpt-5.4-mini`
 When `--use-images` is enabled:
 - first use row `screenshot_path`
 - fallback to `<excel_dir>/<excel_stem>/` and match by `frame`, `rule`, or `row_xxxx`
+
+## QV Exported Context Sidecar
+Newer QV batch exports may include `<excel_stem>_issue_context.json` plus per-row `issue_context_key` and `issue_context_path` columns.
+- Prefer this sidecar for QV-native drawing semantics, row-to-image linkage, rule evidence, and exported context provenance.
+- Continue parsing frame JSON directly for exact current/previous/next object signals, because the sidecar is the stable batch manifest rather than a full replacement for raw frame parsing.
+- If sidecar and parsed JSON disagree, report the discrepancy and use parsed JSON as the primary numeric source.
 
 ## Screenshot Semantics
 - Left side: ICS/original camera view with JSON drawing and LiDAR drawing when available.

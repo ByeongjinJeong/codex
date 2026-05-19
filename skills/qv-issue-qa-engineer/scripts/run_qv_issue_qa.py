@@ -315,8 +315,46 @@ def _issue_from_row(row: pd.Series) -> dict[str, Any]:
         "lidar_lat",
         "reason",
         "screenshot_path",
+        "issue_context_key",
+        "issue_context_path",
     ]
     return {c: _clean(row.get(c)) for c in cols if c in row.index}
+
+
+def _load_exported_issue_context(row: pd.Series, input_excel: Path) -> dict[str, Any] | None:
+    path_value = _clean(row.get("issue_context_path"))
+    candidates: list[Path] = []
+    if isinstance(path_value, str) and path_value.strip():
+        candidates.append(Path(path_value))
+    candidates.append(input_excel.with_name(f"{input_excel.stem}_issue_context.json"))
+
+    context_key = _clean(row.get("issue_context_key"))
+    if not context_key and isinstance(row.name, int):
+        context_key = f"row_{row.name + 2:04d}"
+
+    for candidate in candidates:
+        try:
+            if not candidate.exists():
+                continue
+            document = json.loads(candidate.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        issues = document.get("issues") or []
+        matched = None
+        for item in issues:
+            if isinstance(item, dict) and item.get("context_key") == context_key:
+                matched = item
+                break
+        if matched is None and isinstance(row.name, int) and 0 <= row.name < len(issues):
+            maybe = issues[int(row.name)]
+            matched = maybe if isinstance(maybe, dict) else None
+        return {
+            "context_path": str(candidate),
+            "context_key": context_key,
+            "qv_visualization_manifest": document.get("qv_visualization_manifest") or {},
+            "issue_context": matched or {},
+        }
+    return None
 
 
 def _issue_priority_score(issue: dict[str, Any]) -> int | None:
@@ -761,6 +799,7 @@ def _context_for_llm(
     row_index: int,
     issue: dict[str, Any],
     context: dict[str, Any],
+    exported_issue_context: dict[str, Any] | None,
     image_path: Path | None,
     image_status: str,
     image_note: str,
@@ -774,6 +813,7 @@ def _context_for_llm(
         "issue_from_excel": issue,
         "rule_trigger_basis": _rule_trigger_basis(issue, context),
         "qv_parsed_context": context,
+        "qv_exported_issue_context": exported_issue_context or {},
         "routing_summary": {
             "needs_llm": routing.get("needs_llm"),
             "decision_source": routing.get("decision_source"),
@@ -1314,6 +1354,7 @@ def main() -> int:
     for idx, row in issues_df.iterrows():
         issue = _issue_from_row(row)
         context = _build_context(repo_root, row.get("log_path"), row.get("frame"), row.get("object_id"))
+        exported_issue_context = _load_exported_issue_context(row, input_path)
         if args.use_images:
             image_path, image_status, image_note = _resolve_image_path(row, input_path)
         else:
@@ -1328,7 +1369,16 @@ def main() -> int:
             llm_error = ""
             tokens_used = 0
         else:
-            review_context = _context_for_llm(int(idx), issue, context, image_path, image_status, image_note, routing)
+            review_context = _context_for_llm(
+                int(idx),
+                issue,
+                context,
+                exported_issue_context,
+                image_path,
+                image_status,
+                image_note,
+                routing,
+            )
             llm_result, llm_error, tokens_used = _call_codex_file_review(
                 review_context,
                 args.model,
@@ -1405,6 +1455,7 @@ def main() -> int:
                             "task": "QV 사전 판정 컨텍스트",
                             "issue_from_excel": issue,
                             "qv_parsed_context": context,
+                            "qv_exported_issue_context": exported_issue_context or {},
                             "image_evidence": {
                                 "enabled": image_path is not None,
                                 "path": str(image_path) if image_path else "",
