@@ -5,6 +5,28 @@ but do not add extra process unless the user asks for it.
 
 ## Required Path
 
+## Workbook Feature Selection
+
+Use the existing `focus_feature` column in `input_cases.xlsx` as the single
+review feature selector. Do not add a separate `review_features` column.
+
+Supported values:
+
+```text
+ALL
+OD
+LD
+RBD
+TS
+TL
+OD,RBD
+OD,LD,RBD
+```
+
+`ALL` means run OD/LD/RBD/TS/TL. Comma-separated values run only those selected
+feature stages for evidence packets, feature task JSON, manual/provider
+responses, candidate obligations, validation, and final report rows.
+
 1. Run evidence generation with the CLI default output directory unless the user
    gives an explicit output path.
 
@@ -55,10 +77,12 @@ but do not add extra process unless the user asks for it.
      --retry-failed-feature-reviews
    ```
 
-   Required feature rows after merge:
+   Required feature rows after merge follow the workbook `focus_feature` value:
 
    ```text
-   OD, LD, RBD, TS, TL
+   ALL      -> OD, LD, RBD, TS, TL
+   OD,RBD   -> OD, RBD
+   TL       -> TL
    ```
 
    Required reasoning fields:
@@ -111,7 +135,7 @@ review_quality_status == passed
 cross_feature_audit_status == accepted
 report_mode == final_report
 all mandatory artifacts exist
-OD/LD/RBD/TS/TL rows exist for every package
+required feature rows from focus_feature exist for every package
 machine-detected candidates are adjudicated
 observed_evidence cites frame/package and JSON keys
 ```

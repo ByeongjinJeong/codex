@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.evidence import FrameEvidencePackage
 from auto_vlm.vlm.feature_context import build_feature_review_contexts
 from auto_vlm.vlm.reference_context import load_adas_common_workflow, load_adas_must_not
@@ -285,8 +286,8 @@ def _render_feature_evidence_packets(packets: list[dict[str, object]]) -> list[s
 def _review_cues(json_summary: str, focus_feature: str) -> list[str]:
     """Lift compact json_summary hints into explicit review obligations."""
     cues: list[str] = []
-    selected = (focus_feature or "ALL").upper()
-    if selected in {"ALL", "OD"}:
+    selected = _selected_focus_features(focus_feature)
+    if "OD" in selected:
         if "OD_heading_samples=" in json_summary:
             cues.append(
                 "OD_heading_samples is present. Explicitly evaluate DEF-OD-HEADING: OD / Heading Angle before clearing OD. Compare the visible travel direction in the raw frame with the BEV/VCS object orientation; if a straight-driving vehicle is output with a visibly rotated or wrong BEV heading, trigger DEF-OD-HEADING even when the bbox-fit issue is also present."
@@ -299,11 +300,11 @@ def _review_cues(json_summary: str, focus_feature: str) -> list[str]:
             cues.append(
                 "OD_large_bbox_candidates is present. Explicitly evaluate DEF-OD-BBOX-FIT: OD / Bounding box fit before clearing OD. Large image coverage is only a review cue, never sufficient evidence for a bbox-fit issue. Clear the candidate when the object is a near-field large vehicle/object, partially out of image, or otherwise expected to occupy a large image area unless raw/QV geometry visibly extends beyond the real object shape. If the bad fit is caused by a rotated projection or wrong object orientation, also evaluate and trigger DEF-OD-HEADING instead of reporting only BBOX-FIT."
             )
-    if selected in {"ALL", "RBD"} and "road_edges=0" in json_summary:
+    if "RBD" in selected and "road_edges=0" in json_summary:
         cues.append(
             "road_edges=0. If the raw/QV frame shows a road edge or boundary that should be output, evaluate DEF-LD-RBD-FN for RBD."
         )
-    if selected in {"ALL", "RBD"} and "RBD_low_road_edge_count=" in json_summary:
+    if "RBD" in selected and "RBD_low_road_edge_count=" in json_summary:
         cues.append(
             "RBD_low_road_edge_count is present. Explicitly evaluate DEF-LD-RBD-FN and DEF-LD-RBD-RANGE for RBD before clearing RBD. A single road-edge output can still be a partial miss when the raw/QV frame shows both a left/right drivable boundary or a central divider plus road edge."
         )
@@ -311,6 +312,13 @@ def _review_cues(json_summary: str, focus_feature: str) -> list[str]:
         return ["No compact JSON anomaly cue was detected; still scan every listed DEF-* issue type before assigning pass/fail."]
     cues.append("Do not summarize these cues away; mention the applicable DEF-* item in observed_evidence or inference.")
     return cues
+
+
+def _selected_focus_features(focus_feature: str) -> set[str]:
+    normalized = normalize_review_features(focus_feature)
+    if normalized == "ALL":
+        return {"OD", "LD", "RBD", "TS", "TL"}
+    return set(normalized.split(","))
 
 
 def _render_feature_review_contexts(contexts: list[dict[str, object]]) -> list[str]:

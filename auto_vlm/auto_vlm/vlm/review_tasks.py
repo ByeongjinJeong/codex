@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from auto_vlm.models.evidence import FrameEvidencePackage
+from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.vlm.candidates import obligations_from_json_summary
 from auto_vlm.vlm.evidence_policy import strategies_for_issue_types, strategy_for_issue_type
 from auto_vlm.vlm.feature_context import ACTIVE_FEATURES
@@ -64,7 +65,12 @@ def build_review_tasks(packages: list[FrameEvidencePackage]) -> dict[str, Any]:
 
 
 def _package_task(package: FrameEvidencePackage) -> dict[str, Any]:
-    obligations = obligations_from_json_summary(package.json_summary)
+    selected_features = _selected_features(package.focus_feature)
+    obligations = tuple(
+        obligation
+        for obligation in obligations_from_json_summary(package.json_summary)
+        if any(feature.value == obligation.feature for feature in selected_features)
+    )
     return {
         "package_id": package.package_id,
         "case_id": package.case_id,
@@ -78,7 +84,7 @@ def _package_task(package: FrameEvidencePackage) -> dict[str, Any]:
             "json_summary": package.json_summary or "",
             "evidence_integrity": package.evidence_integrity.as_dict(),
         },
-        "feature_tasks": [_feature_task(feature.value, package) for feature in ACTIVE_FEATURES],
+        "feature_tasks": [_feature_task(feature.value, package) for feature in selected_features],
         "candidate_tasks": [_candidate_task(package, obligation) for obligation in obligations],
     }
 
@@ -167,6 +173,13 @@ def _feature_task(feature: str, package: FrameEvidencePackage) -> dict[str, Any]
             "concrete JSON summary key/value",
         ],
     }
+
+
+def _selected_features(focus_feature: str) -> tuple[Any, ...]:
+    normalized = normalize_review_features(focus_feature)
+    if normalized == "ALL":
+        return ACTIVE_FEATURES
+    return tuple(feature for feature in ACTIVE_FEATURES if feature.value in normalized.split(","))
 
 
 def _candidate_hints(package: FrameEvidencePackage, feature: str) -> list[dict[str, Any]]:

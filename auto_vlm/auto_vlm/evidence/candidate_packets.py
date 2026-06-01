@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from auto_vlm.evidence.overlay_regions import write_full_bev_region, write_full_ics_region, write_object_ics_region
+from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.evidence import CandidateEvidencePacket, FrameEvidencePackage
 from auto_vlm.vlm.candidates import ReviewCandidateObligation, obligations_from_json_summary
 from auto_vlm.vlm.evidence_policy import strategy_for_issue_type
@@ -17,7 +18,12 @@ def write_candidate_evidence_packets(
     case_dir: str | Path,
 ) -> tuple[CandidateEvidencePacket, ...]:
     """Write focused evidence artifacts for machine-detected review candidates."""
-    obligations = obligations_from_json_summary(package.json_summary)
+    selected_features = _selected_focus_features(package.focus_feature)
+    obligations = tuple(
+        obligation
+        for obligation in obligations_from_json_summary(package.json_summary)
+        if obligation.feature in selected_features
+    )
     if not obligations:
         return ()
 
@@ -93,6 +99,13 @@ def write_candidate_evidence_packets(
         packet.packet_markdown.write_text(_render_candidate_packet(packet), encoding="utf-8")
         packets.append(packet)
     return tuple(packets)
+
+
+def _selected_focus_features(focus_feature: str) -> set[str]:
+    normalized = normalize_review_features(focus_feature)
+    if normalized == "ALL":
+        return {"OD", "LD", "RBD", "TS", "TL"}
+    return set(normalized.split(","))
 
 
 def _load_json(path: Path | None) -> dict[str, Any]:

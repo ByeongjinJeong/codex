@@ -79,7 +79,7 @@ def _write_review_results(path: Path, packages) -> None:
                         "inference": f"{package_id} {feature} 평가 결과 pass",
                         "uncertainty": "단일 프레임 기준 평가",
                     }
-                    for feature in ("OD", "LD", "RBD", "TS", "TL")
+                    for feature in packets
                 ],
             }
         )
@@ -150,7 +150,7 @@ def test_run_excel_batch_creates_reports_and_continues_after_bad_video(tmp_path)
     review_tasks = json.loads(result.review_tasks_json.read_text(encoding="utf-8"))
     assert review_tasks["artifact_version"] == "review_tasks_v1"
     assert review_tasks["counts"]["packages"] == 2
-    assert review_tasks["counts"]["feature_tasks"] == 10
+    assert review_tasks["counts"]["feature_tasks"] == 2
     assert review_tasks["model_tasks_root"] == "model/tasks"
     assert review_tasks["packages"][0]["feature_tasks"][0]["required_observed_evidence"]
     assert (tmp_path / "output" / "model" / "tasks" / result.packages[0].package_id / "OD.json").exists()

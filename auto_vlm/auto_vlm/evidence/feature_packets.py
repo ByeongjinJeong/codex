@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.evidence import CandidateEvidencePacket, FeatureEvidencePacket, FrameEvidencePackage
 from auto_vlm.evidence.overlay_regions import write_full_bev_region, write_full_ics_region
 from auto_vlm.models.vlm import Feature
@@ -57,12 +58,10 @@ def write_feature_evidence_packets(
 
 
 def _selected_features(focus_feature: str) -> tuple[Feature, ...]:
-    # Workbook final reports require OD/LD/RBD/TS/TL rows for every package.
-    # Even when input focus_feature narrows JSON summarization, evidence packets
-    # must still exist for all active review features so raw/ICS/BEV/JSON checks
-    # cannot be skipped in the final review.
-    Feature(focus_feature)
-    return ACTIVE_FEATURES
+    normalized = normalize_review_features(focus_feature)
+    if normalized == Feature.ALL.value:
+        return ACTIVE_FEATURES
+    return tuple(feature for feature in ACTIVE_FEATURES if feature.value in normalized.split(","))
 
 
 def _evaluated_issue_types(feature: Feature) -> tuple[str, ...]:

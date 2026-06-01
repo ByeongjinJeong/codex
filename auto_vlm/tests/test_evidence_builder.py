@@ -514,7 +514,7 @@ def test_write_feature_evidence_packets_cover_all_active_features(tmp_path):
     assert "Do not judge only machine candidates" in od_text
 
 
-def test_write_feature_evidence_packets_cover_all_active_features_even_when_focus_is_od(tmp_path):
+def test_write_feature_evidence_packets_follow_focus_feature(tmp_path):
     video_path = tmp_path / "sample.mp4"
     _write_tiny_video(video_path)
     qv_frame = extract_center_frame(video_path, 2, tmp_path / "qv.jpg")
@@ -551,7 +551,47 @@ def test_write_feature_evidence_packets_cover_all_active_features_even_when_focu
 
     packets = write_feature_evidence_packets(package, tmp_path / "output" / "cases" / "CASE_001")
 
-    assert [packet.feature for packet in packets] == ["OD", "LD", "RBD", "TS", "TL"]
+    assert [packet.feature for packet in packets] == ["OD"]
+
+
+def test_write_feature_evidence_packets_follow_multiple_focus_features(tmp_path):
+    video_path = tmp_path / "sample.mp4"
+    _write_tiny_video(video_path)
+    qv_frame = extract_center_frame(video_path, 2, tmp_path / "qv.jpg")
+    package = build_frame_evidence_package(
+        case=EvaluationCase(
+            case_id="CASE_001",
+            video_path=video_path,
+            sampling_request=SamplingRequest(frame_list=(2,), sampling_frame=None),
+            input_source_type="excel",
+            project_type="APTIV_FVC",
+            focus_feature="OD,RBD",
+        ),
+        sampled_frame=2,
+        video_metadata=VideoMetadata(
+            video_path=tmp_path / "qv.mp4",
+            frame_count=300,
+            fps=30.0,
+            width=260,
+            height=120,
+        ),
+        center_frame_image=qv_frame,
+        output_root=tmp_path / "output",
+        qv_overlay_frame_image=qv_frame,
+        raw_frame_image=qv_frame,
+        raw_video_metadata=VideoMetadata(
+            video_path=tmp_path / "raw.h264",
+            frame_count=300,
+            fps=30.0,
+            width=160,
+            height=120,
+        ),
+        json_summary="objects=3; lanes=2; road_edges=1; signs=1; lights=1",
+    )
+
+    packets = write_feature_evidence_packets(package, tmp_path / "output" / "cases" / "CASE_001")
+
+    assert [packet.feature for packet in packets] == ["OD", "RBD"]
 
 
 def _video_for_metadata(tmp_path: Path) -> Path:

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.evidence import FrameEvidencePackage
 from auto_vlm.models.results import ACTIVE_REVIEW_FEATURES, FrameTestResult, PackageReviewResult
 from auto_vlm.vlm.candidates import obligations_from_json_summary
@@ -79,6 +80,13 @@ def empty_review_quality_report() -> ReviewQualityReport:
     return ReviewQualityReport(status="not_run")
 
 
+def _expected_review_features(focus_feature: str) -> set[str]:
+    normalized = normalize_review_features(focus_feature)
+    if normalized == "ALL":
+        return set(ACTIVE_REVIEW_FEATURES)
+    return set(normalized.split(","))
+
+
 def validate_review_quality(
     packages: list[FrameEvidencePackage],
     results: dict[str, PackageReviewResult],
@@ -132,7 +140,19 @@ def validate_review_quality(
             package_count_with_candidates += 1
 
         features = {feature.feature: feature for feature in result.feature_results}
-        missing_features = sorted(ACTIVE_REVIEW_FEATURES - set(features))
+        expected_features = _expected_review_features(package.focus_feature)
+        unexpected_features = sorted(set(features) - expected_features)
+        for feature in unexpected_features:
+            findings.append(
+                ReviewQualityFinding(
+                    code="unexpected_feature_review",
+                    severity="error",
+                    package_id=package.package_id,
+                    feature=feature,
+                    message="Feature result is outside the workbook focus_feature selection.",
+                )
+            )
+        missing_features = sorted(expected_features - set(features))
         for feature in missing_features:
             findings.append(
                 ReviewQualityFinding(
@@ -140,7 +160,7 @@ def validate_review_quality(
                     severity="error",
                     package_id=package.package_id,
                     feature=feature,
-                    message="Full review mode requires OD, LD, RBD, TS, and TL feature rows.",
+                    message="Review result is missing a row required by workbook focus_feature.",
                 )
             )
 

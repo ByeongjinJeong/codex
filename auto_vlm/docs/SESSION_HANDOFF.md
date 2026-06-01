@@ -68,6 +68,16 @@ Correct direction:
 6. Generate final reports from feature verdicts only.
 ```
 
+Workbook feature selection:
+
+```text
+input_cases.xlsx uses the existing focus_feature column as the only selector.
+Do not add review_features.
+Accepted examples: ALL, OD, RBD, OD,RBD, OD,LD,RBD.
+The selected features drive evidence packets, feature tasks, candidate
+obligations, validation, and final report rows.
+```
+
 Important distinction:
 
 ```text

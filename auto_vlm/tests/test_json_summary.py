@@ -40,6 +40,22 @@ def test_feature_specific_ld_summary_includes_ids():
     assert "LD_ids=L1,L2" in summary
 
 
+def test_feature_specific_summary_accepts_multiple_features():
+    summary = summarize_frame_json(
+        {
+            "objects": [{"id": 1, "class": "vehicle"}],
+            "lanes": [{"track_id": "L1"}],
+            "road_edges": [{"track_id": "R1"}],
+        },
+        focus_feature="OD,RBD",
+    )
+
+    assert "OD_classes=vehicle" in summary
+    assert "RBD_ids=" in summary
+    assert "L1" in summary
+    assert "R1" in summary
+
+
 def test_feature_specific_traffic_light_summary_includes_states():
     summary = summarize_frame_json(
         {

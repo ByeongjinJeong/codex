@@ -353,3 +353,9 @@ def test_review_tasks_include_issue_specific_evidence_strategy_for_bev_first_ite
     assert "DEF-OD-HEADING" in strategies
     assert strategies["DEF-OD-HEADING"]["review_order"] == ["raw_context", "bev_vcs", "json", "ics"]
     assert "BEV/VCS geometry" in strategies["DEF-OD-HEADING"]["primary_discovery"]
+
+
+def test_review_tasks_follow_multiple_focus_features():
+    tasks = build_review_tasks([_package_with_json_summary("objects=8; lanes=2", focus_feature="OD,RBD")])
+
+    assert [task["feature"] for task in tasks["packages"][0]["feature_tasks"]] == ["OD", "RBD"]

@@ -31,6 +31,23 @@ def _require_non_empty(value: str, field_name: str) -> str:
     return value.strip()
 
 
+def normalize_review_features(value: str | None) -> str:
+    if not value or not value.strip():
+        return "ALL"
+    parts = [part.strip().upper() for part in value.split(",") if part.strip()]
+    if not parts:
+        return "ALL"
+    if "ALL" in parts:
+        if len(parts) > 1:
+            raise ValueError("focus_feature cannot combine ALL with specific features")
+        return "ALL"
+    unsupported = sorted(set(parts) - SUPPORTED_FOCUS_FEATURES)
+    if unsupported:
+        supported = ", ".join(sorted(SUPPORTED_FOCUS_FEATURES))
+        raise ValueError(f"focus_feature must contain only: {supported}")
+    return ",".join(dict.fromkeys(parts))
+
+
 @dataclass(frozen=True)
 class SamplingRequest:
     frame_list: tuple[int, ...] = ()
@@ -100,11 +117,7 @@ class EvaluationCase:
         qv_video_path = Path(self.qv_video_path) if self.qv_video_path is not None else Path(self.video_path)
         object.__setattr__(self, "qv_video_path", qv_video_path)
 
-        focus_feature = self.focus_feature.strip().upper() if self.focus_feature else "ALL"
-        if focus_feature not in SUPPORTED_FOCUS_FEATURES:
-            supported = ", ".join(sorted(SUPPORTED_FOCUS_FEATURES))
-            raise ValueError(f"focus_feature must be one of: {supported}")
-        object.__setattr__(self, "focus_feature", focus_feature or "ALL")
+        object.__setattr__(self, "focus_feature", normalize_review_features(self.focus_feature))
 
         if self.input_source_path is not None:
             object.__setattr__(self, "input_source_path", Path(self.input_source_path))

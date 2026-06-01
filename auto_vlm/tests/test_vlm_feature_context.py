@@ -22,6 +22,12 @@ def test_focus_feature_builds_common_and_matching_feature_context():
     assert any("host_lanes" in item for item in contexts[0].inspection_checklist)
 
 
+def test_focus_feature_can_select_multiple_contexts():
+    contexts = build_feature_review_contexts("OD,RBD")
+
+    assert [context.feature.value for context in contexts] == ["OD", "RBD"]
+
+
 def test_all_focus_builds_active_feature_contexts():
     contexts = build_feature_review_contexts("ALL")
 

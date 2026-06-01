@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.results import (
     ACTIVE_REVIEW_FEATURES,
     CandidateAdjudication,
@@ -493,7 +494,12 @@ def _validate_package_candidate_obligations(
         result = results[package.package_id]
         features_by_name = {feature.feature: feature for feature in result.feature_results}
         _validate_feature_four_plane_evidence(package, result)
-        obligations = obligations_from_json_summary(package.json_summary)
+        selected_features = _selected_focus_features(getattr(package, "focus_feature", "ALL"))
+        obligations = tuple(
+            obligation
+            for obligation in obligations_from_json_summary(package.json_summary)
+            if obligation.feature in selected_features
+        )
         if not obligations:
             continue
         candidate_packets = {
@@ -547,6 +553,13 @@ def _validate_package_candidate_obligations(
                 raise ReviewResultLoadError(
                     f"{package.package_id} feature {feature.feature} cannot pass with unresolved candidate {obligation.candidate_id}"
                 )
+
+
+def _selected_focus_features(focus_feature: str) -> set[str]:
+    normalized = normalize_review_features(focus_feature)
+    if normalized == "ALL":
+        return set(ACTIVE_REVIEW_FEATURES)
+    return set(normalized.split(","))
 
 
 def _validate_feature_four_plane_evidence(

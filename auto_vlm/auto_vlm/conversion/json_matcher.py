@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.evidence import EvidenceIntegrity, JsonFrameMatchStatus, JsonParseStatus
 
 
@@ -200,17 +201,31 @@ def _collect_status_hints(data: Any) -> list[str]:
 
 
 def _feature_specific_hint(data: dict[str, Any], focus_feature: str) -> str:
-    feature = (focus_feature or "ALL").upper()
-    if feature == "OD":
+    features = _selected_focus_features(focus_feature)
+    hints = []
+    if "OD" in features:
         classes = _collect_values_by_key(data, ["class", "class_name", "type"])[:8]
-        return "OD_classes=" + ",".join(map(str, classes)) if classes else ""
-    if feature in {"LD", "RBD"}:
-        lane_ids = _collect_values_by_key(data, ["track_id", "lane_id", "id"])[:8]
-        return f"{feature}_ids=" + ",".join(map(str, lane_ids)) if lane_ids else ""
-    if feature in {"TS", "TL"}:
+        if classes:
+            hints.append("OD_classes=" + ",".join(map(str, classes)))
+    for feature in ("LD", "RBD"):
+        if feature in features:
+            lane_ids = _collect_values_by_key(data, ["track_id", "lane_id", "id"])[:8]
+            if lane_ids:
+                hints.append(f"{feature}_ids=" + ",".join(map(str, lane_ids)))
+    for feature in ("TS", "TL"):
+        if feature not in features:
+            continue
         states = _collect_values_by_key(data, ["sign_name", "struct_state", "state"])[:8]
-        return f"{feature}_states=" + ",".join(map(str, states)) if states else ""
-    return ""
+        if states:
+            hints.append(f"{feature}_states=" + ",".join(map(str, states)))
+    return "; ".join(hints)
+
+
+def _selected_focus_features(focus_feature: str) -> set[str]:
+    normalized = normalize_review_features(focus_feature)
+    if normalized == "ALL":
+        return {"OD", "LD", "RBD", "TS", "TL"}
+    return set(normalized.split(","))
 
 
 def _od_issue_hints(data: dict[str, Any]) -> list[str]:

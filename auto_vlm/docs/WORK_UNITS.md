@@ -111,6 +111,14 @@ Out of scope for the next unit unless explicitly requested:
 
 ## Key Decisions
 
+### D0. Workbook Feature Selection Uses One Column
+
+`input_cases.xlsx` uses `focus_feature` as the single review selector. There is
+no separate `review_features` column. The column accepts `ALL`, a single feature
+such as `OD`, or comma-separated feature subsets such as `OD,RBD`. The selected
+features drive feature evidence packets, feature task JSON, feature responses,
+candidate obligations, validation, and final report rows.
+
 ### D1. Prompt Work Must Be Split
 
 One large markdown packet is too broad. The correct execution unit is:
