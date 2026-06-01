@@ -18,8 +18,10 @@ def write_review_tasks(path: str | Path, packages: list[FrameEvidencePackage]) -
     """Write package/feature/candidate-level tasks needed before final reporting."""
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
+    tasks = build_review_tasks(packages)
+    _write_feature_task_files(output.parent / "model" / "tasks", tasks)
     output.write_text(
-        json.dumps(build_review_tasks(packages), indent=2, ensure_ascii=False),
+        json.dumps(tasks, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     return output
@@ -38,6 +40,7 @@ def build_review_tasks(packages: list[FrameEvidencePackage]) -> dict[str, Any]:
             "feature_tasks": feature_count,
             "candidate_tasks": candidate_count,
         },
+        "model_tasks_root": "model/tasks",
         "instructions": {
             "result_order": "raw_context first, then follow each issue_type's evidence_strategy order before decision",
             "final_report_rule": (
@@ -125,10 +128,28 @@ def _feature_task(feature: str, package: FrameEvidencePackage) -> dict[str, Any]
     ]
     return {
         "task_id": f"{package.package_id}::{feature}",
+        "package_id": package.package_id,
+        "case_id": package.case_id,
+        "sampled_frame": package.sampled_frame,
         "feature": feature,
         "evidence": _feature_evidence(package, feature),
         "required_result_values": ["pass", "fail"],
+        "issue_types": evaluated_issue_types,
         "evaluated_issue_types": evaluated_issue_types,
+        "candidate_hints": _candidate_hints(package, feature),
+        "required_schema": {
+            "package_id": "string",
+            "feature": feature,
+            "result": "pass|fail",
+            "confidence": "high|medium|low",
+            "evaluated_issue_types": "list[DEF-*]",
+            "triggered_issue_types": "list[DEF-*]",
+            "summary": "string",
+            "observed_evidence": "string citing raw, ICS/QV, BEV/VCS, and JSON",
+            "inference": "string",
+            "uncertainty": "string",
+            "candidate_adjudications": "list[object], optional",
+        },
         "issue_evidence_strategy": [
             strategy.as_dict()
             for strategy in strategies_for_issue_types(evaluated_issue_types)
@@ -146,6 +167,28 @@ def _feature_task(feature: str, package: FrameEvidencePackage) -> dict[str, Any]
             "concrete JSON summary key/value",
         ],
     }
+
+
+def _candidate_hints(package: FrameEvidencePackage, feature: str) -> list[dict[str, Any]]:
+    hints: list[dict[str, Any]] = []
+    for obligation in obligations_from_json_summary(package.json_summary):
+        if obligation.feature == feature:
+            hints.append(_candidate_task(package, obligation))
+    return hints
+
+
+def _write_feature_task_files(root: Path, tasks: dict[str, Any]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    for package_task in tasks["packages"]:
+        package_id = package_task["package_id"]
+        package_dir = root / package_id
+        package_dir.mkdir(parents=True, exist_ok=True)
+        for task in package_task["feature_tasks"]:
+            task_path = package_dir / f"{task['feature']}.json"
+            task_path.write_text(
+                json.dumps(task, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
 
 
 def _feature_evidence(package: FrameEvidencePackage, feature: str) -> dict[str, Any]:

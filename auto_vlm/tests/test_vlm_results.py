@@ -209,7 +209,17 @@ def test_load_review_results_requires_feature_evidence_sources(tmp_path):
     path = tmp_path / "llm_review_results.json"
     path.write_text(json.dumps({"results": [row]}), encoding="utf-8")
 
-    with pytest.raises(ReviewResultLoadError, match="must cite raw frame, QV overlay, and JSON evidence"):
+    with pytest.raises(ReviewResultLoadError, match="must cite raw frame, QV overlay, BEV/VCS, and JSON evidence"):
+        load_review_results(path)
+
+
+def test_load_review_results_requires_triggered_issue_to_be_evaluated(tmp_path):
+    row = _review_row()
+    row["feature_results"][0]["triggered_issue_types"] = ["DEF-OD-VELOCITY"]
+    path = tmp_path / "llm_review_results.json"
+    path.write_text(json.dumps({"results": [row]}), encoding="utf-8")
+
+    with pytest.raises(ReviewResultLoadError, match="triggered_issue_types must be included"):
         load_review_results(path)
 
 

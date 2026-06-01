@@ -90,8 +90,8 @@ def test_write_result_xlsx_includes_feature_result_evidence_sheet(tmp_path):
                 feature="OD",
                 result=FrameTestResult.FAIL,
                 confidence=Confidence.HIGH,
-                evaluated_issue_types=("DEF-OD-BBOX-FIT",),
-                triggered_issue_types=("DEF-OD-BBOX-FIT",),
+                evaluated_issue_types=("ISSUE_OD_GEOMETRY",),
+                triggered_issue_types=("ISSUE_OD_GEOMETRY",),
                 summary="OD bbox geometry is wrong",
                 observed_evidence="raw frame bus, QV overlay oversized box, JSON object id 60",
                 inference="OD fails this frame",
@@ -113,7 +113,7 @@ def test_write_result_xlsx_includes_feature_result_evidence_sheet(tmp_path):
     assert row["package_id"] == package.package_id
     assert row["feature"] == "OD"
     assert row["result"] == "fail"
-    assert row["triggered_issue_types"] == "DEF-OD-BBOX-FIT"
+    assert row["triggered_issue_types"] == "ISSUE_OD_GEOMETRY"
     assert "CASE_001 frame 100 OD 관찰 증거" in row["observed_evidence"]
     assert "raw_frame_image=" in row["observed_evidence"]
     assert "qv_overlay_frame_image=" in row["observed_evidence"]
@@ -130,23 +130,23 @@ def test_write_result_xlsx_keeps_candidate_details_out_of_final_sheet(tmp_path):
                 feature="OD",
                 result=FrameTestResult.FAIL,
                 confidence=Confidence.HIGH,
-                evaluated_issue_types=("DEF-OD-BBOX-DUP",),
-                triggered_issue_types=("DEF-OD-BBOX-DUP",),
+                evaluated_issue_types=("ISSUE_OD_DUPLICATE",),
+                triggered_issue_types=("ISSUE_OD_DUPLICATE",),
                 summary="전방 원거리 차량 영역에서 172-182 OD BBOX 중복 검출 이슈",
                 candidate_adjudications=(
                     CandidateAdjudication(
-                        candidate_id="OD_BBOX_DUP_171_183",
+                        candidate_id="CANDIDATE_CLEARED",
                         feature="OD",
-                        issue_type="DEF-OD-BBOX-DUP",
+                        issue_type="ISSUE_OD_DUPLICATE",
                         object_ids=("171", "183"),
                         result="cleared",
                         checked_planes=("raw", "ics", "bev_vcs", "json"),
                         summary="171-183 is cleared by BEV/VCS separation.",
                     ),
                     CandidateAdjudication(
-                        candidate_id="OD_BBOX_DUP_172_182",
+                        candidate_id="CANDIDATE_ISSUE",
                         feature="OD",
-                        issue_type="DEF-OD-BBOX-DUP",
+                        issue_type="ISSUE_OD_DUPLICATE",
                         object_ids=("172", "182"),
                         result="issue",
                         checked_planes=("raw", "ics", "bev_vcs", "json"),
@@ -176,9 +176,9 @@ def test_reports_expose_feature_crop_artifacts_without_candidate_details(tmp_pat
     package = _package(tmp_path)
     feature_ics = tmp_path / "output/cases/CASE_001/feature_evidence/CASE_001__frame_00000100/OD__ics.jpg"
     feature_bev = tmp_path / "output/cases/CASE_001/feature_evidence/CASE_001__frame_00000100/OD__bev.jpg"
-    candidate_ics = tmp_path / "output/cases/CASE_001/candidate_evidence/CASE_001__frame_00000100/OD_BBOX_DUP_172_182__ics.jpg"
-    candidate_bev = tmp_path / "output/cases/CASE_001/candidate_evidence/CASE_001__frame_00000100/OD_BBOX_DUP_172_182__bev.jpg"
-    candidate_json = tmp_path / "output/cases/CASE_001/candidate_evidence/CASE_001__frame_00000100/OD_BBOX_DUP_172_182__json.json"
+    candidate_ics = tmp_path / "output/cases/CASE_001/candidate_evidence/CASE_001__frame_00000100/CANDIDATE_ISSUE__ics.jpg"
+    candidate_bev = tmp_path / "output/cases/CASE_001/candidate_evidence/CASE_001__frame_00000100/CANDIDATE_ISSUE__bev.jpg"
+    candidate_json = tmp_path / "output/cases/CASE_001/candidate_evidence/CASE_001__frame_00000100/CANDIDATE_ISSUE__json.json"
     for path in (feature_ics, feature_bev, candidate_ics, candidate_bev, candidate_json):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"fake")
@@ -194,10 +194,10 @@ def test_reports_expose_feature_crop_artifacts_without_candidate_details(tmp_pat
         ),
         candidate_evidence_packets=(
             CandidateEvidencePacket(
-                candidate_id="OD_BBOX_DUP_172_182",
+                candidate_id="CANDIDATE_ISSUE",
                 package_id=package.package_id,
                 feature="OD",
-                issue_type="DEF-OD-BBOX-DUP",
+                issue_type="ISSUE_OD_DUPLICATE",
                 object_ids=("172", "182"),
                 source="OD_bbox_overlap_candidates",
                 ics_crop_image=candidate_ics,
@@ -212,17 +212,17 @@ def test_reports_expose_feature_crop_artifacts_without_candidate_details(tmp_pat
                 feature="OD",
                 result=FrameTestResult.FAIL,
                 confidence=Confidence.HIGH,
-                evaluated_issue_types=("DEF-OD-BBOX-DUP",),
-                triggered_issue_types=("DEF-OD-BBOX-DUP",),
+                evaluated_issue_types=("ISSUE_OD_DUPLICATE",),
+                triggered_issue_types=("ISSUE_OD_DUPLICATE",),
                 summary="전방 차량 bbox 중복 이슈",
                 observed_evidence="raw/qv/bev/json",
                 inference="OD fail",
                 uncertainty="single frame",
                 candidate_adjudications=(
                     CandidateAdjudication(
-                        candidate_id="OD_BBOX_DUP_172_182",
+                        candidate_id="CANDIDATE_ISSUE",
                         feature="OD",
-                        issue_type="DEF-OD-BBOX-DUP",
+                        issue_type="ISSUE_OD_DUPLICATE",
                         object_ids=("172", "182"),
                         result="issue",
                         checked_planes=("raw", "ics", "bev_vcs", "json"),
@@ -295,8 +295,8 @@ def test_write_summary_html_links_evidence_and_errors(tmp_path):
                 feature="OD",
                 result=FrameTestResult.FAIL,
                 confidence=Confidence.LOW,
-                evaluated_issue_types=("DEF-OD-BBOX-DUP", "DEF-OD-CLASS"),
-                triggered_issue_types=("DEF-OD-BBOX-DUP",),
+                evaluated_issue_types=("ISSUE_OD_DUPLICATE", "ISSUE_OD_CLASS"),
+                triggered_issue_types=("ISSUE_OD_DUPLICATE",),
                 summary="OD distance value jumped",
                 observed_evidence="OD object position differs between raw/QV/JSON",
                 inference="OD feature fails this frame",
@@ -306,7 +306,7 @@ def test_write_summary_html_links_evidence_and_errors(tmp_path):
                 feature="LD",
                 result=FrameTestResult.PASS,
                 confidence=Confidence.MEDIUM,
-                evaluated_issue_types=("DEF-LD-RBD-FN", "DEF-LD-RBD-FP"),
+                evaluated_issue_types=("ISSUE_LD_MISSING", "ISSUE_LD_FALSE_POSITIVE"),
                 triggered_issue_types=(),
                 summary="LD lane evidence is acceptable",
                 observed_evidence="lane overlay follows visible lane markings",
@@ -337,9 +337,9 @@ def test_write_summary_html_links_evidence_and_errors(tmp_path):
     assert "PASS" in html
     assert "OD" in html
     assert "LD" in html
-    assert "CASE_001 frame 100 OD는 raw/ICS(QV)/BEV/JSON 4-plane 검토 결과 DEF-OD-BBOX-DUP 이슈가 확인되어 fail입니다." in html
-    assert "CASE_001 frame 100 LD는 raw/ICS(QV)/BEV/JSON 4-plane 검토 결과 DEF-LD-RBD-FN, DEF-LD-RBD-FP에서 단일 프레임 기준 결함이 확인되지 않아 pass입니다." in html
-    assert "DEF-OD-BBOX-DUP" in html
+    assert "CASE_001 frame 100 OD는 raw/ICS(QV)/BEV/JSON 4-plane 검토 결과 ISSUE_OD_DUPLICATE 이슈가 확인되어 fail입니다." in html
+    assert "CASE_001 frame 100 LD는 raw/ICS(QV)/BEV/JSON 4-plane 검토 결과 ISSUE_LD_MISSING, ISSUE_LD_FALSE_POSITIVE에서 단일 프레임 기준 결함이 확인되지 않아 pass입니다." in html
+    assert "ISSUE_OD_DUPLICATE" in html
     assert "기능 검토 리포트" in html
     assert "판단 근거" in html
     assert "[이슈 요약]" in html
@@ -372,23 +372,23 @@ def test_write_summary_html_reports_only_issue_candidate_adjudications(tmp_path)
                 feature="OD",
                 result=FrameTestResult.FAIL,
                 confidence=Confidence.HIGH,
-                evaluated_issue_types=("DEF-OD-BBOX-DUP",),
-                triggered_issue_types=("DEF-OD-BBOX-DUP",),
+                evaluated_issue_types=("ISSUE_OD_DUPLICATE",),
+                triggered_issue_types=("ISSUE_OD_DUPLICATE",),
                 summary="전방 원거리 차량 영역에서 172-182 OD BBOX 중복 검출 이슈",
                 candidate_adjudications=(
                     CandidateAdjudication(
-                        candidate_id="OD_BBOX_DUP_171_183",
+                        candidate_id="CANDIDATE_CLEARED",
                         feature="OD",
-                        issue_type="DEF-OD-BBOX-DUP",
+                        issue_type="ISSUE_OD_DUPLICATE",
                         object_ids=("171", "183"),
                         result="cleared",
                         checked_planes=("raw", "ics", "bev_vcs", "json"),
                         summary="171-183 is cleared by BEV/VCS separation.",
                     ),
                     CandidateAdjudication(
-                        candidate_id="OD_BBOX_DUP_172_182",
+                        candidate_id="CANDIDATE_ISSUE",
                         feature="OD",
-                        issue_type="DEF-OD-BBOX-DUP",
+                        issue_type="ISSUE_OD_DUPLICATE",
                         object_ids=("172", "182"),
                         result="issue",
                         checked_planes=("raw", "ics", "bev_vcs", "json"),
@@ -406,8 +406,8 @@ def test_write_summary_html_reports_only_issue_candidate_adjudications(tmp_path)
     )
     html = output_path.read_text(encoding="utf-8")
 
-    assert "OD_BBOX_DUP_172_182" in html
-    assert "OD_BBOX_DUP_171_183" not in html
+    assert "CANDIDATE_ISSUE" not in html
+    assert "CANDIDATE_CLEARED" not in html
     assert "cleared" not in html
     assert "전방 원거리 차량 영역에서 172-182 OD BBOX 중복 검출 이슈" in html
 

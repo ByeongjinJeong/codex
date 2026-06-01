@@ -42,12 +42,18 @@ class RunInspection:
         return str(self.manifest.get("review_quality", {}).get("status", "unknown"))
 
     @property
+    def cross_feature_audit_status(self) -> str:
+        stage = _stage_by_name(self.manifest, "cross_feature_audit")
+        return str(stage.get("status", "unknown"))
+
+    @property
     def is_final_ready(self) -> bool:
         return (
             self.packages > 0
             and self.errors == 0
             and self.review_results == self.packages
             and self.review_quality_status == "passed"
+            and self.cross_feature_audit_status == "accepted"
             and not self.missing_artifacts
         )
 
@@ -94,6 +100,7 @@ def format_run_inspection(inspection: RunInspection) -> str:
             f"  review_results: {inspection.review_results}",
             f"  errors: {inspection.errors}",
             f"  review_quality_status: {inspection.review_quality_status}",
+            f"  cross_feature_audit_status: {inspection.cross_feature_audit_status}",
             f"  final_ready: {str(inspection.is_final_ready).lower()}",
             "fail_rows:",
         ]
@@ -139,3 +146,13 @@ def _fail_rows(path: Path) -> tuple[tuple[str, str, str], ...]:
                 )
             )
     return tuple(fails)
+
+
+def _stage_by_name(manifest: dict[str, Any], name: str) -> dict[str, Any]:
+    stages = manifest.get("stages", [])
+    if not isinstance(stages, list):
+        return {}
+    for stage in stages:
+        if isinstance(stage, dict) and stage.get("name") == name:
+            return stage
+    return {}

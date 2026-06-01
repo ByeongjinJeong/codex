@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from auto_vlm.models.evidence import FrameEvidencePackage
@@ -65,6 +67,11 @@ class ReviewQualityReport:
             "errors": len(self.errors),
             "warnings": len(self.warnings),
             "findings": [finding.as_dict() for finding in self.findings],
+            "retryable_failures": [
+                finding.as_dict()
+                for finding in self.errors
+                if finding.package_id and finding.feature
+            ],
         }
 
 
@@ -201,6 +208,43 @@ def validate_review_quality(
 
     status = "failed" if any(finding.severity == "error" for finding in findings) else "passed"
     return ReviewQualityReport(status=status, findings=tuple(findings))
+
+
+def write_review_validation_artifacts(
+    root: str | Path,
+    packages: list[FrameEvidencePackage],
+    results: dict[str, PackageReviewResult],
+    report: ReviewQualityReport,
+) -> int:
+    """Write one validation artifact per package + feature result."""
+    validation_root = Path(root)
+    validation_root.mkdir(parents=True, exist_ok=True)
+    findings_by_key: dict[tuple[str, str], list[ReviewQualityFinding]] = defaultdict(list)
+    for finding in report.findings:
+        findings_by_key[(finding.package_id, finding.feature)].append(finding)
+    written = 0
+    for package in packages:
+        result = results.get(package.package_id)
+        if result is None:
+            continue
+        package_dir = validation_root / package.package_id
+        package_dir.mkdir(parents=True, exist_ok=True)
+        for feature in result.feature_results:
+            findings = findings_by_key.get((package.package_id, feature.feature), [])
+            has_error = any(item.severity == "error" for item in findings)
+            payload = {
+                "package_id": package.package_id,
+                "feature": feature.feature,
+                "validation_status": "invalid" if has_error else "valid",
+                "retryable": has_error,
+                "findings": [item.as_dict() for item in findings],
+            }
+            (package_dir / f"{feature.feature}.json").write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            written += 1
+    return written
 
 
 def _validate_text_encoding(

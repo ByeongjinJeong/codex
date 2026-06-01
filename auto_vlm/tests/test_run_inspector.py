@@ -13,6 +13,9 @@ def _write_manifest(run_dir):
                 "review_quality": {
                     "status": "passed",
                 },
+                "stages": [
+                    {"name": "cross_feature_audit", "status": "accepted", "facts": {}},
+                ],
             }
         ),
         encoding="utf-8",
@@ -42,14 +45,14 @@ def test_inspect_run_reports_required_artifacts_and_fail_rows(tmp_path):
             {
                 "results": [
                     {
-                        "package_id": "CASE_002__frame_00000235",
+                        "package_id": "PKG_SYNTHETIC_FAIL",
                         "feature_results": [
                             {
-                                "feature": "RBD",
+                                "feature": "FEATURE_X",
                                 "result": "fail",
                                 "triggered_issue_types": [
-                                    "DEF-LD-RBD-FN",
-                                    "DEF-LD-RBD-RANGE",
+                                    "ISSUE_A",
+                                    "ISSUE_B",
                                 ],
                             }
                         ],
@@ -65,5 +68,23 @@ def test_inspect_run_reports_required_artifacts_and_fail_rows(tmp_path):
 
     assert inspection.is_final_ready is True
     assert "final_ready: true" in text
+    assert "cross_feature_audit_status: accepted" in text
     assert "llm_review_results.json" in text
-    assert "CASE_002__frame_00000235 | RBD | DEF-LD-RBD-FN,DEF-LD-RBD-RANGE" in text
+    assert "PKG_SYNTHETIC_FAIL | FEATURE_X | ISSUE_A,ISSUE_B" in text
+
+
+def test_inspect_run_requires_accepted_cross_feature_audit(tmp_path):
+    _write_manifest(tmp_path)
+    manifest_path = tmp_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["stages"][0]["status"] = "conflict"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    (tmp_path / "result.xlsx").write_text("xlsx", encoding="utf-8")
+    (tmp_path / "summary.html").write_text("html", encoding="utf-8")
+    (tmp_path / "review_tasks.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "llm_review_results.json").write_text(json.dumps({"results": []}), encoding="utf-8")
+
+    inspection = inspect_run_dir(tmp_path)
+
+    assert inspection.cross_feature_audit_status == "conflict"
+    assert inspection.is_final_ready is False

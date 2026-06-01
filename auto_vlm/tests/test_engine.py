@@ -138,17 +138,22 @@ def test_run_excel_batch_creates_reports_and_continues_after_bad_video(tmp_path)
     assert manifest["stages"][1]["status"] == "completed"
     assert manifest["stages"][2]["name"] == "review_tasks"
     assert manifest["stages"][2]["status"] == "completed"
+    assert manifest["stages"][3]["name"] == "feature_vlm_review"
     assert manifest["stages"][3]["status"] == "pending"
-    assert manifest["stages"][4]["name"] == "review_quality"
+    assert manifest["stages"][4]["name"] == "feature_result_validation"
     assert manifest["stages"][4]["status"] == "not_run"
-    assert manifest["stages"][5]["status"] == "pending_review"
+    assert manifest["stages"][5]["name"] == "cross_feature_audit"
+    assert manifest["stages"][5]["status"] == "pending"
+    assert manifest["stages"][6]["status"] == "pending_review"
     assert manifest["errors"][0]["code"] == "video_unreadable"
 
     review_tasks = json.loads(result.review_tasks_json.read_text(encoding="utf-8"))
     assert review_tasks["artifact_version"] == "review_tasks_v1"
     assert review_tasks["counts"]["packages"] == 2
     assert review_tasks["counts"]["feature_tasks"] == 10
+    assert review_tasks["model_tasks_root"] == "model/tasks"
     assert review_tasks["packages"][0]["feature_tasks"][0]["required_observed_evidence"]
+    assert (tmp_path / "output" / "model" / "tasks" / result.packages[0].package_id / "OD.json").exists()
 
 
 def test_run_excel_batch_creates_final_reports_only_after_review_results(tmp_path):
@@ -202,8 +207,12 @@ def test_run_excel_batch_creates_final_reports_only_after_review_results(tmp_pat
     assert manifest["stages"][2]["status"] == "completed"
     assert manifest["stages"][3]["status"] == "completed"
     assert manifest["stages"][4]["status"] == "passed"
-    assert manifest["stages"][5]["status"] == "completed"
+    assert manifest["stages"][5]["status"] == "accepted"
+    assert manifest["stages"][6]["status"] == "completed"
     assert manifest["review_quality"]["status"] == "passed"
+    assert manifest["cross_feature_audit"]["accepted"] == 1
+    assert (output_dir / "model" / "validation" / reviewed_result.packages[0].package_id / "OD.json").exists()
+    assert (output_dir / "model" / "audits" / f"{reviewed_result.packages[0].package_id}.json").exists()
 
 
 def test_run_excel_batch_still_creates_reports_when_review_quality_fails(tmp_path):
@@ -252,7 +261,7 @@ def test_run_excel_batch_still_creates_reports_when_review_quality_fails(tmp_pat
     assert reviewed_result.summary_html is not None and reviewed_result.summary_html.exists()
     manifest = json.loads(reviewed_result.manifest_json.read_text(encoding="utf-8"))
     assert manifest["stages"][4]["status"] == "failed"
-    assert manifest["stages"][5]["status"] == "completed"
+    assert manifest["stages"][6]["status"] == "completed"
     assert manifest["review_quality"]["errors"] >= 1
 
 

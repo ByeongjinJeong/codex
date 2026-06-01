@@ -382,26 +382,13 @@ Validator should check structure and omissions:
 Validator should not be treated as the main fix. The main fix is better LLM
 evidence and prompt flow.
 
-### P1. Regression Baseline
+### P1. Regression Boundary
 
-Use `input_cases.xlsx` as a workflow regression fixture.
-
-Required baseline:
-
-```text
-CASE_002__frame_00000235
-  OD_BBOX_DUP_171_183 -> cleared
-  OD_BBOX_DUP_172_182 -> issue
-  feature OD -> fail, DEF-OD-BBOX-DUP
-```
-
-Run-level expected fail rows after correction:
-
-```text
-CASE_002__frame_00000153 | OD  | DEF-OD-BBOX-FIT
-CASE_002__frame_00000153 | RBD | DEF-LD-RBD-FN
-CASE_002__frame_00000235 | OD  | DEF-OD-BBOX-DUP
-```
+Do not use `input_cases.xlsx` as a hard-coded VLM correctness oracle. It may be
+used to exercise the workflow shape, artifact generation, report propagation,
+and validation/audit gates. Judgment-quality evaluation must come from feature
+review responses flowing through the same task, validation, audit, and report
+contracts used for unseen cases.
 
 ## 5. Proposed Implementation Units
 
@@ -553,8 +540,7 @@ Decision 5:
 
 7. Loader/validator rejects candidate decisions missing BEV observation.
 
-8. CASE_002 frame 235 baseline is preserved:
-   171-183 cleared, 172-182 issue.
+8. No test hard-codes corrected input workbook fail rows as VLM correctness.
 
 9. Relevant tests pass.
 
@@ -582,4 +568,3 @@ Proceed with a narrow OD_BBOX_DUP-focused LLM workflow redesign.
 Do not continue adding instruction sentences to the broad packet as the primary
 solution. The next implementation should make the LLM see the evidence in the
 same structure that a tester uses.
-

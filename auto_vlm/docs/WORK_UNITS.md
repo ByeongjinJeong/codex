@@ -349,7 +349,7 @@ Design for these commands or equivalent internal APIs:
 ```text
 --until evidence
 --only-feature OD
---only-package CASE_001__frame_00000520
+--only-package <package_id>
 --retry-failed-feature-reviews
 --reuse-existing-artifacts
 --reuse-feature-responses
@@ -362,7 +362,7 @@ validation.
 
 ### WU-20. Remove Or Rename Misleading Golden VLM Test
 
-Status: pending
+Status: done
 
 Goal:
 
@@ -371,11 +371,19 @@ Correct the test added during the interrupted session. It should not claim to
 validate VLM correctness by comparing fixed fail rows.
 ```
 
-Files likely touched:
+Result:
+
+```text
+Removed tests/test_input_cases_golden.py. The fixed input_cases fail-row check
+depended on ignored generated artifacts and test videos, and it could be
+misread as VLM correctness. Report propagation remains covered by report tests
+that construct explicit PackageReviewResult fixtures.
+```
+
+Files touched:
 
 ```text
 tests/test_input_cases_golden.py
-tests/test_reports.py
 docs/WORK_UNITS.md
 docs/SESSION_HANDOFF.md
 ```
@@ -392,17 +400,27 @@ Acceptance criteria:
 Verification:
 
 ```text
-python -m pytest tests/test_input_cases_golden.py tests/test_reports.py -q
+python -m pytest tests/test_reports.py tests/test_engine.py tests/test_vlm_results.py -q
 ```
 
 ### WU-21. Feature Review Task JSON
 
-Status: pending
+Status: done
 
 Goal:
 
 ```text
 Create one machine-readable review task per package + feature.
+```
+
+Result:
+
+```text
+write_review_tasks now preserves the batch review_tasks.json index and also
+writes per-feature task artifacts under model/tasks/<package_id>/<feature>.json.
+Each feature task includes package_id, task_id, feature, feature-scoped evidence,
+issue_types/evaluated_issue_types, required_schema, and feature-local
+candidate_hints.
 ```
 
 Files likely touched:
@@ -434,7 +452,7 @@ python -m pytest tests/test_vlm_schema.py tests/test_engine.py -q
 
 ### WU-22. Feature VLM Runner Interface
 
-Status: pending
+Status: done
 
 Goal:
 
@@ -442,6 +460,15 @@ Goal:
 Add an execution interface for feature-level VLM reviews. If provider execution
 is not available yet, create a provider boundary and a local/manual response
 loader that uses the same artifact contract.
+```
+
+Result:
+
+```text
+Added FeatureReviewProvider, ManualResponseProvider, run_feature_reviews, and
+merge_feature_responses. Manual/provider responses use the same
+model/responses/<package_id>/<feature>.json contract. CLI now accepts
+--feature-responses and --reuse-feature-responses.
 ```
 
 Files likely touched:
@@ -474,12 +501,20 @@ python -m pytest tests/test_vlm_results.py tests/test_cli.py -q
 
 ### WU-23. Coverage Validator
 
-Status: pending
+Status: done
 
 Goal:
 
 ```text
 Add deterministic validation after feature responses.
+```
+
+Result:
+
+```text
+Validation now writes model/validation/<package_id>/<feature>.json artifacts
+and exposes retryable feature-level failures in review_quality. result_loader
+also rejects triggered_issue_types that were not included in evaluated_issue_types.
 ```
 
 Validation must check:
@@ -519,13 +554,22 @@ python -m pytest tests/test_vlm_results.py tests/test_engine.py -q
 
 ### WU-24. Cross-Feature Audit
 
-Status: pending
+Status: done
 
 Goal:
 
 ```text
 Add a lightweight package-level audit that checks whether feature assignment is
 wrong or contradictory after all feature results exist.
+```
+
+Result:
+
+```text
+Added deterministic package-level cross-feature audit artifacts under
+model/audits/<package_id>.json. The audit can accept, request a specific feature
+rerun, or flag conflicts such as duplicate issue ownership across features.
+Manifest records accepted/rerun/conflict counts.
 ```
 
 Audit should detect cases like:
@@ -564,12 +608,20 @@ python -m pytest tests/test_vlm_results.py tests/test_engine.py -q
 
 ### WU-25. Report Final Verdict Only
 
-Status: pending
+Status: done
 
 Goal:
 
 ```text
 Ensure final reports show feature verdicts, not internal candidate workflow.
+```
+
+Result:
+
+```text
+Final report text now omits candidate IDs and candidate adjudication details.
+Report tests use synthetic pass-through issue labels where report propagation is
+being tested, instead of real workbook-specific expected issue rows.
 ```
 
 Files likely touched:
@@ -598,13 +650,24 @@ python -m pytest tests/test_reports.py -q
 
 ### WU-26. End-To-End Workbook Review Command
 
-Status: pending
+Status: done
 
 Goal:
 
 ```text
 Provide one command/workflow that runs workbook evidence, feature review,
 validation, audit, merge, and report generation.
+```
+
+Result:
+
+```text
+CLI output now prints the explicit stage list and feature review/audit counts.
+The run command supports --feature-responses, --reuse-feature-responses, and
+--retry-failed-feature-reviews. inspect-run now requires cross_feature_audit to
+be accepted before final_ready can be true. Workbook workflow docs describe
+evidence-only stops, manual feature response execution, response reuse, retry,
+validation, audit, and final inspection.
 ```
 
 Files likely touched:
@@ -710,19 +773,19 @@ Track as a candidate now. Create after WU-21 through WU-26 stabilize.
 
 ## Current Verification Snapshot
 
-As of the last interrupted session:
+As of WU-25 through WU-26:
 
 ```text
-python -m pytest tests/test_input_cases_golden.py -q
-  -> 1 passed
+git diff --check
+  -> passed
 
-python -m pytest tests/test_reports.py tests/test_engine.py tests/test_vlm_results.py -q
-  -> 38 passed
+python -m pytest -q
+  -> 119 passed in 3.17s
 ```
 
-Important caveat:
+Important caveat resolved in WU-20:
 
 ```text
-tests/test_input_cases_golden.py was added during diagnosis and should be
-reviewed first under WU-20. It must not be treated as VLM correctness.
+tests/test_input_cases_golden.py was removed because it encoded fixed fail rows
+from a fixed review artifact and was not a valid VLM evaluation.
 ```

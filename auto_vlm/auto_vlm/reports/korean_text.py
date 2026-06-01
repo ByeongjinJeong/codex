@@ -8,27 +8,20 @@ from auto_vlm.models.results import CandidateAdjudication, FeatureReviewResult, 
 
 def feature_summary(package: FrameEvidencePackage, feature: FeatureReviewResult) -> str:
     if feature.result == FrameTestResult.PASS:
-        cleared = _candidate_phrase(feature, "cleared", "해소된 후보")
-        candidate_text = f" {cleared}" if cleared else ""
         return (
             f"{package.case_id} frame {package.sampled_frame} {feature.feature}는 "
             f"raw/ICS(QV)/BEV/JSON 4-plane 검토 결과 "
             f"{_issue_list(feature.evaluated_issue_types)}에서 단일 프레임 기준 결함이 확인되지 않아 pass입니다."
-            f"{candidate_text}"
         )
 
     if feature.result == FrameTestResult.FAIL:
         if _looks_korean(feature.summary):
             return feature.summary
-        issue = _candidate_phrase(feature, "issue", "확정된 후보")
         triggered = _issue_list(feature.triggered_issue_types) or "검출 이슈"
-        base = (
+        return (
             f"{package.case_id} frame {package.sampled_frame} {feature.feature}는 "
             f"raw/ICS(QV)/BEV/JSON 4-plane 검토 결과 {triggered} 이슈가 확인되어 fail입니다."
         )
-        if issue:
-            return f"{base} {issue}"
-        return base
 
     if _looks_korean(feature.summary):
         return feature.summary
@@ -40,21 +33,9 @@ def feature_summary(package: FrameEvidencePackage, feature: FeatureReviewResult)
 
 def feature_observed_evidence(package: FrameEvidencePackage, feature: FeatureReviewResult) -> str:
     evidence = _package_evidence(package)
-    issue_evidence = [
-        _candidate_evidence_text(item)
-        for item in feature.candidate_adjudications
-        if item.result == "issue"
-    ]
-    cleared_evidence = [
-        _candidate_evidence_text(item)
-        for item in feature.candidate_adjudications
-        if item.result == "cleared"
-    ]
-    details = issue_evidence or cleared_evidence
-    suffix = f" 후보 판정 근거: {' / '.join(details)}" if details else ""
     return (
         f"{package.case_id} frame {package.sampled_frame} {feature.feature} 관찰 증거: "
-        f"{evidence}{suffix}"
+        f"{evidence}"
     )
 
 
@@ -67,12 +48,9 @@ def feature_inference(package: FrameEvidencePackage, feature: FeatureReviewResul
             f"{evaluated}를 검토했으나 triggered issue가 없어 pass로 판정합니다."
         )
     if feature.result == FrameTestResult.FAIL:
-        candidate = _candidate_phrase(feature, "issue", "근거 후보")
-        candidate_text = f" {candidate}" if candidate else ""
         return (
             f"{package.case_id} frame {package.sampled_frame} {feature.feature} 판단: "
             f"{triggered or '검출 이슈'}가 raw/ICS(QV)/BEV/JSON 증거와 JSON 값으로 뒷받침되어 fail로 판정합니다."
-            f"{candidate_text}"
         )
     return (
         f"{package.case_id} frame {package.sampled_frame} {feature.feature} 판단: "

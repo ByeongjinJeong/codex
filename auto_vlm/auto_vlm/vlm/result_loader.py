@@ -417,6 +417,11 @@ def _validate_issue_types(
         raise ReviewResultLoadError(
             f"{location}.triggered_issue_types contains unknown issue type(s): {', '.join(unknown_triggered)}"
         )
+    unchecked_triggered = sorted(triggered - evaluated)
+    if unchecked_triggered:
+        raise ReviewResultLoadError(
+            f"{location}.triggered_issue_types must be included in evaluated_issue_types: {', '.join(unchecked_triggered)}"
+        )
 
 
 def _validate_observed_evidence_sources(observed_evidence: str, location: str) -> None:
@@ -433,7 +438,7 @@ def _validate_observed_evidence_sources(observed_evidence: str, location: str) -
         missing.append("JSON")
     if missing:
         raise ReviewResultLoadError(
-            f"{location}.observed_evidence must cite raw frame, QV overlay, and JSON evidence; missing: {', '.join(missing)}"
+            f"{location}.observed_evidence must cite raw frame, QV overlay, BEV/VCS, and JSON evidence; missing: {', '.join(missing)}"
         )
 
 
@@ -447,12 +452,6 @@ def _optional_review_mode(data: dict[str, Any], location: str) -> str:
             f"{location}.review_mode must be one of: gtless_single_frame, gt_reference"
         )
     return review_mode
-
-    unchecked_triggered = sorted(triggered - evaluated)
-    if unchecked_triggered:
-        raise ReviewResultLoadError(
-            f"{location}.triggered_issue_types must be included in evaluated_issue_types: {', '.join(unchecked_triggered)}"
-        )
 
 
 def _aggregate_confidence(features: list[FeatureReviewResult]) -> Confidence:
