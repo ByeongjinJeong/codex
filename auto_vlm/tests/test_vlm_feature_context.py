@@ -54,7 +54,7 @@ def test_od_context_forces_full_issue_type_scan():
     assert any("DEF-OD-BBOX-DUP" in item for item in context.issue_type_guidance)
 
 
-def test_each_active_context_requires_every_md_defined_issue_type_before_pass():
+def test_each_active_context_covers_every_md_defined_issue_type_before_pass():
     contexts = build_feature_review_contexts("ALL")
 
     for context in contexts:

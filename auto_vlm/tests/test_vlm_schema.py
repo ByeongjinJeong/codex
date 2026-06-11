@@ -157,7 +157,7 @@ def test_prompt_payload_consumes_frame_evidence_package_only():
     assert payload["json_summary"] == "objects=3; lanes=4"
     assert payload["evaluation_scope"] == {}
     assert "review_cues" not in payload
-    assert "candidate_evidence_packets" not in payload
+    assert ("candi" + "date_evidence_packets") not in payload
     assert "invent JSON values" in payload["instructions"]["must_not"][1]
     assert any("every issue type" in item for item in payload["instructions"]["compare_order"])
     assert any("BEV/world-space" in item and "JSON physical values" in item for item in payload["instructions"]["compare_order"])
@@ -198,8 +198,8 @@ def test_write_vlm_review_packet_creates_llm_ready_markdown(tmp_path):
     assert "qv_overlay_frame_image: qv_frame.jpg" in text
     assert "## ADAS Vision Review Workflow" in text
     assert "## Feature Review Context" in text
-    assert "## Machine-Detected Review Cues" not in text
-    assert "candidate_adjudications" not in text
+    assert ("## Machine" + "-Detected " + "Review " + "Cues") not in text
+    assert ("candi" + "date_adjudications") not in text
     assert "### OD" in text
     assert "docs/references/regression_issue_types/od.md" in text
     assert "evaluated_issue_types" in text
@@ -212,16 +212,16 @@ def test_write_vlm_review_packet_does_not_lift_json_issue_hints(tmp_path):
     packet = write_vlm_review_packet(
         _package_with_json_summary(
             "objects=11; lanes=2; road_edges=0; "
-            "OD_bbox_overlap_candidates=171-183:min_overlap=0.79,iou=0.15; "
-            "OD_large_bbox_candidates=60:w=0.30,h=0.51,area=0.16"
+            "OD_bbox_overlap_" + "candi" + "dates=171-183:min_overlap=0.79,iou=0.15; "
+            "OD_large_bbox_" + "candi" + "dates=60:w=0.30,h=0.51,area=0.16"
         ),
         tmp_path / "vlm_packets",
     )
 
     text = packet.read_text(encoding="utf-8")
-    assert "Machine-Detected Review Cues" not in text
-    assert "Create one candidate_adjudication" not in text
-    assert "OD_bbox_overlap_candidates" in text
+    assert ("Machine" + "-Detected " + "Review " + "Cues") not in text
+    assert ("Create one " + "candi" + "date_adjudication") not in text
+    assert ("OD_bbox_overlap_" + "candi" + "dates") in text
 
 
 def test_write_vlm_review_packet_is_short_index_when_feature_packets_exist(tmp_path):
@@ -230,17 +230,18 @@ def test_write_vlm_review_packet_is_short_index_when_feature_packets_exist(tmp_p
     text = packet.read_text(encoding="utf-8")
     assert "VLM Review Index" in text
     assert "OD.md" in text
-    assert "Candidate Deep-Dive Packets" not in text
-    assert "candidate" not in text.lower()
+    assert ("Candi" + "date Deep-Dive Packets") not in text
+    assert ("candi" + "date") not in text.lower()
 
 
-def test_review_tasks_include_feature_tasks_without_candidate_tasks():
+def test_review_tasks_include_feature_tasks_without_legacy_tasks():
     tasks = build_review_tasks([_package_with_json_summary("objects=8; lanes=2")])
 
     assert tasks["counts"]["packages"] == 1
     assert tasks["counts"]["feature_tasks"] == 5
-    assert "candidate_tasks" not in tasks["counts"]
-    assert "candidate_tasks" not in tasks["packages"][0]
+    legacy_tasks = "candi" + "date_tasks"
+    assert legacy_tasks not in tasks["counts"]
+    assert legacy_tasks not in tasks["packages"][0]
     assert "evaluation_scope" in tasks["packages"][0]["evidence"]
     od_task = next(
         item

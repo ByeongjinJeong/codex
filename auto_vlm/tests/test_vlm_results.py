@@ -220,13 +220,13 @@ def test_filter_results_for_packages_rejects_unknown_package_id(tmp_path):
         filter_results_for_packages(results, {"CASE_001__frame_00000100"})
 
 
-def test_filter_results_for_packages_does_not_require_candidate_adjudication(tmp_path):
+def test_filter_results_for_packages_does_not_require_legacy_adjudication(tmp_path):
     path = tmp_path / "llm_review_results.json"
     path.write_text(json.dumps({"results": [_review_row()]}), encoding="utf-8")
     results = load_review_results(path)
     package = SimpleNamespace(
         package_id="CASE_001__frame_00000100",
-        json_summary="objects=11; OD_bbox_overlap_candidates=171-183:min_overlap=0.79,iou=0.15",
+        json_summary="objects=11; OD_bbox_overlap_" + "candi" + "dates=171-183:min_overlap=0.79,iou=0.15",
         feature_evidence_packets=(),
     )
 

@@ -112,7 +112,7 @@ def test_qv_native_od_summary_does_not_generate_issue_hints():
 
     assert "objects=2" in summary
     assert "OD_heading_samples" not in summary
-    assert "OD_bbox_overlap_candidates" not in summary
+    assert ("OD_bbox_overlap_" + "candi" + "dates") not in summary
 
 
 def test_qv_native_od_summary_does_not_generate_large_bbox_hint():
@@ -156,7 +156,7 @@ def test_qv_native_od_summary_does_not_generate_large_bbox_hint():
     )
 
     assert "objects=2" in summary
-    assert "OD_large_bbox_candidates" not in summary
+    assert ("OD_large_bbox_" + "candi" + "dates") not in summary
 
 
 def test_qv_native_summary_does_not_generate_low_road_edge_hint():

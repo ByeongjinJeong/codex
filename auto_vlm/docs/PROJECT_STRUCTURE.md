@@ -54,7 +54,7 @@ auto_vlm/
 
 ```text
 scripts/
-  Thin wrappers for local smoke runs and developer utilities.
+  Thin wrappers for local developer utilities.
   Reusable workflow logic should live under auto_vlm/, not stay in scripts/.
 
 tests/

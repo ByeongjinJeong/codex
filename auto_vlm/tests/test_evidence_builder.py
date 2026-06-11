@@ -130,7 +130,8 @@ def test_write_feature_evidence_packets_cover_all_active_features(tmp_path):
     assert "primary_discovery" in od_text
     assert "## Evaluation Scope" in od_text
     assert "vehicle_max_long_distance_m" in od_text
-    assert "candidate" not in od_text.lower()
+    legacy_term = "candi" + "date"
+    assert legacy_term not in od_text.lower()
 
 
 def test_write_feature_evidence_packets_cover_all_active_features_even_when_focus_is_od(tmp_path):

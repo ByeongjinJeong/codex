@@ -34,7 +34,7 @@ docs/testing/WORKBOOK_RUNBOOK.md
 ```
 
 That document is the execution contract for workbook tests. It takes precedence
-over smoke-test or planning docs for run procedure. In particular, do not replace
+over old notes or planning docs for run procedure. In particular, do not replace
 packet-by-packet VLM review with contact sheets, merged images, raw-frame sweeps,
 or a directly authored aggregate `llm_review_results.json`.
 

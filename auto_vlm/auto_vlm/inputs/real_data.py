@@ -65,7 +65,7 @@ def write_discovered_cases_workbook(path: Path, discovered: DiscoveredRealData, 
     )
     sheet.append(
         [
-            "REAL_SMOKE_001",
+            "AUTO_DISCOVERED_001",
             str(discovered.qv_mp4_path),
             str(discovered.qv_mp4_path),
             str(discovered.normalized_raw_video_path or discovered.raw_h264_path or ""),
@@ -73,7 +73,7 @@ def write_discovered_cases_workbook(path: Path, discovered: DiscoveredRealData, 
             str(discovered.json_dir) if discovered.json_dir else "",
             "AUTO_DISCOVERED",
             "ALL",
-            "real data smoke test",
+            "auto discovered real data workbook",
         ]
     )
     workbook.save(path)
