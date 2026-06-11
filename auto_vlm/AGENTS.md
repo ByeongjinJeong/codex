@@ -21,16 +21,22 @@ workflow. If verification cannot be run, say exactly why.
 
 ## Auto VLM Operating Rule
 
-When the user asks to run, rerun, test, review, or generate results for an input
-workbook, follow the durable workflow in:
+When running or testing a workbook, do not stop at evidence artifacts just
+because review tasks are pending. Continue through the available review,
+validation, and report stages; if a required stage cannot run, report the run as
+incomplete instead of successful.
+
+For any user request like "test this Excel workbook", "run VLM test", or
+"workbook full pipeline", first read and follow:
 
 ```text
-docs/testing/AUTO_VLM_WORKBOOK_RUN_WORKFLOW.md
+docs/testing/WORKBOOK_RUNBOOK.md
 ```
 
-Do not replace that workflow with ad hoc output names, evidence-only stops, or
-untracked assistant judgment artifacts unless the user explicitly asks for a
-different mode.
+That document is the execution contract for workbook tests. It takes precedence
+over smoke-test or planning docs for run procedure. In particular, do not replace
+packet-by-packet VLM review with contact sheets, merged images, raw-frame sweeps,
+or a directly authored aggregate `llm_review_results.json`.
 
 ## VLM Issue Fix Rule
 

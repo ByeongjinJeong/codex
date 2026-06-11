@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from auto_vlm.models.cases import SamplingMode, SamplingRequest
+from auto_vlm.models.cases import DEFAULT_SAMPLING_START_FRAME, SamplingMode, SamplingRequest
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ def _resolve_explicit_frames(request: SamplingRequest, frame_count: int) -> Samp
 def _resolve_bounds(request: SamplingRequest, frame_count: int) -> tuple[int, int, list[str]]:
     warnings: list[str] = []
     max_frame = frame_count - 1
-    start = request.start_frame if request.start_frame is not None else 0
+    start = request.start_frame if request.start_frame is not None else DEFAULT_SAMPLING_START_FRAME
     end = request.end_frame if request.end_frame is not None else max_frame
 
     if start > max_frame:

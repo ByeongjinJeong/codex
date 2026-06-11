@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from auto_vlm.models.evidence import FrameEvidencePackage
-from auto_vlm.models.results import CandidateAdjudication, FeatureReviewResult, FrameTestResult
+from auto_vlm.models.results import FeatureReviewResult, FrameTestResult
 
 
 def feature_summary(package: FrameEvidencePackage, feature: FeatureReviewResult) -> str:
@@ -46,7 +46,7 @@ def feature_inference(package: FrameEvidencePackage, feature: FeatureReviewResul
         return (
             f"{package.case_id} frame {package.sampled_frame} {feature.feature} 판단: "
             f"{evaluated}를 검토했으나 triggered issue가 없어 pass로 판정합니다."
-        )
+    )
     if feature.result == FrameTestResult.FAIL:
         return (
             f"{package.case_id} frame {package.sampled_frame} {feature.feature} 판단: "
@@ -66,23 +66,6 @@ def feature_uncertainty(package: FrameEvidencePackage, feature: FeatureReviewRes
     )
 
 
-def candidate_adjudications_text(feature: FeatureReviewResult) -> str:
-    lines = []
-    for item in feature.candidate_adjudications:
-        if item.result != "issue":
-            continue
-        planes = ",".join(item.checked_planes)
-        object_text = f"; object_ids={','.join(item.object_ids)}" if item.object_ids else ""
-        lines.append(
-            (
-                f"{item.candidate_id}: issue; planes={planes}; "
-                f"issue_type={item.issue_type}{object_text}; "
-                f"요약={_candidate_summary(item)}"
-            )
-        )
-    return "\n".join(lines)
-
-
 def _package_evidence(package: FrameEvidencePackage) -> str:
     raw = str(package.raw_frame_image) if package.raw_frame_image else ""
     qv = str(package.qv_overlay_frame_image or package.center_frame_image)
@@ -94,35 +77,6 @@ def _package_evidence(package: FrameEvidencePackage) -> str:
         f"json_snippet={json_path}; "
         f"JSON summary={summary}."
     )
-
-
-def _candidate_phrase(feature: FeatureReviewResult, result: str, label: str) -> str:
-    values = [
-        f"{item.candidate_id}({item.issue_type})"
-        for item in feature.candidate_adjudications
-        if item.result == result
-    ]
-    if not values:
-        return ""
-    return f"{label}: {', '.join(values)}."
-
-
-def _candidate_evidence_text(item: CandidateAdjudication) -> str:
-    object_text = f" object_ids={','.join(item.object_ids)};" if item.object_ids else ""
-    return (
-        f"{item.candidate_id}({item.issue_type}) result={item.result};"
-        f"{object_text} {_candidate_summary(item)}"
-    )
-
-
-def _candidate_summary(item: CandidateAdjudication) -> str:
-    if _looks_korean(item.summary):
-        return item.summary
-    if item.result == "issue":
-        return f"{item.issue_type} 후보가 4-plane 검토에서 이슈로 유지되었습니다."
-    if item.result == "cleared":
-        return f"{item.issue_type} 후보가 4-plane 검토에서 해소되었습니다."
-    return f"{item.issue_type} 후보는 불확실합니다."
 
 
 def _issue_list(values: tuple[str, ...]) -> str:

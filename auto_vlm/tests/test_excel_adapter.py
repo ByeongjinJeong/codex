@@ -43,7 +43,7 @@ def test_valid_excel_row_becomes_evaluation_case(tmp_path):
                 "json",
                 "APTIV_FVC",
                 "100,250,480",
-                "OD,RBD",
+                "",
                 "sw_version=2026.05; weather=night",
                 "broad scan",
                 "night_regression",
@@ -64,7 +64,7 @@ def test_valid_excel_row_becomes_evaluation_case(tmp_path):
     assert case.sampling_request.frame_list == (100, 250, 480)
     assert case.sampling_request.sampling_frame is None
     assert case.sampling_request.mode == SamplingMode.EXPLICIT_FRAMES
-    assert case.focus_feature == "OD,RBD"
+    assert case.focus_feature == "ALL"
     assert case.frame_metadata["sw_version"] == "2026.05"
     assert case.external_metadata["campaign"] == "night_regression"
 
@@ -183,4 +183,4 @@ def test_invalid_focus_feature_returns_error(tmp_path):
 
     assert result.cases == []
     assert result.errors[0].code == "excel_row_invalid"
-    assert "focus_feature must contain only" in result.errors[0].cause
+    assert "focus_feature must be one of" in result.errors[0].cause

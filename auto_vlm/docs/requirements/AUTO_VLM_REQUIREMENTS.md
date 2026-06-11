@@ -24,7 +24,8 @@ input_cases_template.xlsx
   -> matching JSON snippet
   -> FrameEvidencePackage
   -> LLM feature review
-  -> result.xlsx + summary.html after review results exist
+  -> review validation
+  -> result.xlsx + summary.html
 ```
 
 ## 3. Required Inputs
@@ -229,9 +230,9 @@ else:
 
 `summary.html` is the primary local review artifact.
 
-It is generated only after a valid `llm_review_results.json` has been loaded.
-Evidence-only runs should write `manifest.json` and packet artifacts but not
-final reports.
+Workbook runs are expected to continue through feature review, validation, and
+final report generation. Evidence-only output is a partial diagnostic mode, not
+the default completion state.
 
 It must show:
 
@@ -262,7 +263,7 @@ auto_vlm/
   conversion/   video, raw h264 remux, frame extraction, JSON matching
   sampling/     decide sampled frames
   evidence/     build FrameEvidencePackage
-  vlm/          LLM/VLM contract and future review execution
+  vlm/          LLM/VLM contract and review execution
   reports/      result.xlsx and summary.html
   pipeline/     batch orchestration
   models/       shared schemas
@@ -287,9 +288,5 @@ Boundary rules:
 - Qualification Visualizer reimplementation
 - all-frame exhaustive review
 - multi-model adjudication
-- provider trial work
 - cloud integration requirements
 ```
-
-Provider trial work was intentionally removed from the active plan. It can be
-added later only if explicitly requested.

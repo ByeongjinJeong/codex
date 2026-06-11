@@ -33,7 +33,7 @@ auto_vlm/
 
   vlm/
     Define the VLM review contract and write VLM-ready packet files.
-    Provider-backed VLM execution is future work.
+    Review execution and result loading live behind this boundary.
 
   reports/
     Write final human-facing outputs such as result.xlsx and summary.html.
@@ -60,19 +60,16 @@ scripts/
 tests/
   Unit and integration tests for the runtime modules.
 
-docs/
-  Requirements, references, testing workflow, and historical planning notes.
+  docs/
+  Requirements, references, runbooks, and coverage notes.
 
   Active operational docs:
-    docs/testing/AUTO_VLM_WORKBOOK_RUN_WORKFLOW.md
+    docs/testing/WORKBOOK_RUNBOOK.md
     docs/references/regression_issue_types/
     docs/references/qualification_visualizer_output_info.md
 
-  Historical planning docs:
-    docs/planning/
-    docs/implementation/
-    docs/WORK_UNITS.md
-    docs/SESSION_HANDOFF.md
+  Development coverage docs:
+    docs/testing/AUTO_VLM_TEST_COVERAGE.md
 
 outputs/
   Generated local run artifacts. Not part of the source architecture.
@@ -98,9 +95,6 @@ If a module starts doing work from several rows above, split it before adding mo
 ## Source Of Truth Rules
 
 ```text
-Run workflow:
-  docs/testing/AUTO_VLM_WORKBOOK_RUN_WORKFLOW.md
-
 Feature judgment criteria:
   docs/references/regression_issue_types/
 

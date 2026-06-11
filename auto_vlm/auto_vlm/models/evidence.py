@@ -101,8 +101,8 @@ class FeatureEvidencePacket:
     bev_crop_status: str = "unavailable_or_unverified"
     json_snippet: Path | None = None
     json_summary: str = ""
+    evaluation_scope: dict[str, Any] = field(default_factory=dict)
     evaluated_issue_types: tuple[str, ...] = ()
-    candidate_packet_paths: tuple[Path, ...] = ()
     packet_markdown: Path | None = None
 
     def __post_init__(self) -> None:
@@ -110,8 +110,8 @@ class FeatureEvidencePacket:
             raise ValueError("package_id is required")
         if not self.feature.strip():
             raise ValueError("feature is required")
+        object.__setattr__(self, "evaluation_scope", dict(self.evaluation_scope))
         object.__setattr__(self, "evaluated_issue_types", tuple(self.evaluated_issue_types))
-        object.__setattr__(self, "candidate_packet_paths", tuple(Path(path) for path in self.candidate_packet_paths))
         for field_name in (
             "raw_frame_image",
             "qv_overlay_frame_image",
@@ -136,69 +136,8 @@ class FeatureEvidencePacket:
             "bev_crop_status": self.bev_crop_status,
             "json_snippet": str(self.json_snippet) if self.json_snippet else "",
             "json_summary": self.json_summary,
+            "evaluation_scope": self.evaluation_scope,
             "evaluated_issue_types": list(self.evaluated_issue_types),
-            "candidate_packet_paths": [str(path) for path in self.candidate_packet_paths],
-            "packet_markdown": str(self.packet_markdown) if self.packet_markdown else "",
-        }
-
-
-@dataclass(frozen=True)
-class CandidateEvidencePacket:
-    candidate_id: str
-    package_id: str
-    feature: str
-    issue_type: str
-    object_ids: tuple[str, ...]
-    source: str
-    raw_frame_image: Path | None = None
-    qv_overlay_frame_image: Path | None = None
-    ics_crop_image: Path | None = None
-    ics_crop_status: str = "unavailable_or_unverified"
-    bev_crop_image: Path | None = None
-    bev_crop_status: str = "unavailable_or_unverified"
-    candidate_json_values: Path | None = None
-    full_json_snippet: Path | None = None
-    json_summary: str = ""
-    candidate_review_summary: str = ""
-    packet_markdown: Path | None = None
-
-    def __post_init__(self) -> None:
-        if not self.candidate_id.strip():
-            raise ValueError("candidate_id is required")
-        if not self.package_id.strip():
-            raise ValueError("package_id is required")
-        object.__setattr__(self, "object_ids", tuple(str(value) for value in self.object_ids))
-        for field_name in (
-            "raw_frame_image",
-            "qv_overlay_frame_image",
-            "ics_crop_image",
-            "bev_crop_image",
-            "candidate_json_values",
-            "full_json_snippet",
-            "packet_markdown",
-        ):
-            value = getattr(self, field_name)
-            if value is not None:
-                object.__setattr__(self, field_name, Path(value))
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "candidate_id": self.candidate_id,
-            "package_id": self.package_id,
-            "feature": self.feature,
-            "issue_type": self.issue_type,
-            "object_ids": list(self.object_ids),
-            "source": self.source,
-            "raw_frame_image": str(self.raw_frame_image) if self.raw_frame_image else "",
-            "qv_overlay_frame_image": str(self.qv_overlay_frame_image) if self.qv_overlay_frame_image else "",
-            "ics_crop_image": str(self.ics_crop_image) if self.ics_crop_image else "",
-            "ics_crop_status": self.ics_crop_status,
-            "bev_crop_image": str(self.bev_crop_image) if self.bev_crop_image else "",
-            "bev_crop_status": self.bev_crop_status,
-            "candidate_json_values": str(self.candidate_json_values) if self.candidate_json_values else "",
-            "full_json_snippet": str(self.full_json_snippet) if self.full_json_snippet else "",
-            "json_summary": self.json_summary,
-            "candidate_review_summary": self.candidate_review_summary,
             "packet_markdown": str(self.packet_markdown) if self.packet_markdown else "",
         }
 
@@ -226,11 +165,11 @@ class FrameEvidencePackage:
     frame_metadata: dict[str, Any] = field(default_factory=dict)
     json_snippet: Path | None = None
     json_summary: str | None = None
+    evaluation_scope: dict[str, Any] = field(default_factory=dict)
     context_offsets: tuple[int, ...] = ()
     sampling_mode: str | None = None
     output_paths: dict[str, str] = field(default_factory=dict)
     feature_evidence_packets: tuple[FeatureEvidencePacket, ...] = ()
-    candidate_evidence_packets: tuple[CandidateEvidencePacket, ...] = ()
     tool_version: str | None = None
 
     def __post_init__(self) -> None:
@@ -256,9 +195,9 @@ class FrameEvidencePackage:
                 object.__setattr__(self, field_name, Path(value))
         if self.json_snippet is not None:
             object.__setattr__(self, "json_snippet", Path(self.json_snippet))
+        object.__setattr__(self, "evaluation_scope", dict(self.evaluation_scope))
         object.__setattr__(self, "context_offsets", tuple(self.context_offsets))
         object.__setattr__(self, "feature_evidence_packets", tuple(self.feature_evidence_packets))
-        object.__setattr__(self, "candidate_evidence_packets", tuple(self.candidate_evidence_packets))
 
     @classmethod
     def make_package_id(cls, case_id: str, sampled_frame: int) -> str:

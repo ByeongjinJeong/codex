@@ -40,22 +40,6 @@ def test_feature_specific_ld_summary_includes_ids():
     assert "LD_ids=L1,L2" in summary
 
 
-def test_feature_specific_summary_accepts_multiple_features():
-    summary = summarize_frame_json(
-        {
-            "objects": [{"id": 1, "class": "vehicle"}],
-            "lanes": [{"track_id": "L1"}],
-            "road_edges": [{"track_id": "R1"}],
-        },
-        focus_feature="OD,RBD",
-    )
-
-    assert "OD_classes=vehicle" in summary
-    assert "RBD_ids=" in summary
-    assert "L1" in summary
-    assert "R1" in summary
-
-
 def test_feature_specific_traffic_light_summary_includes_states():
     summary = summarize_frame_json(
         {
@@ -92,7 +76,7 @@ def test_qv_native_sections_are_counted_without_dumping_nested_status_dicts():
     assert "Current_Error_Reason={'Internal': 0}" not in summary
 
 
-def test_qv_native_od_summary_includes_heading_and_overlap_hints():
+def test_qv_native_od_summary_does_not_generate_issue_hints():
     summary = summarize_frame_json(
         {
             "avi_objects": {
@@ -126,11 +110,12 @@ def test_qv_native_od_summary_includes_heading_and_overlap_hints():
         }
     )
 
-    assert "OD_heading_samples=171:-3.13/o6,183:-3.08/o6" in summary
-    assert "OD_bbox_overlap_candidates=171-183:" in summary
+    assert "objects=2" in summary
+    assert "OD_heading_samples" not in summary
+    assert "OD_bbox_overlap_candidates" not in summary
 
 
-def test_qv_native_od_summary_includes_large_bbox_hint():
+def test_qv_native_od_summary_does_not_generate_large_bbox_hint():
     summary = summarize_frame_json(
         {
             "avi_objects": {
@@ -170,10 +155,11 @@ def test_qv_native_od_summary_includes_large_bbox_hint():
         }
     )
 
-    assert "OD_large_bbox_candidates=60:" in summary
+    assert "objects=2" in summary
+    assert "OD_large_bbox_candidates" not in summary
 
 
-def test_qv_native_summary_flags_low_road_edge_count_for_rbd_review():
+def test_qv_native_summary_does_not_generate_low_road_edge_hint():
     summary = summarize_frame_json(
         {
             "avi_lanes_host": {"VIS_LH_Element": [{"id": "L1"}, {"id": "L2"}]},
@@ -183,4 +169,4 @@ def test_qv_native_summary_flags_low_road_edge_count_for_rbd_review():
 
     assert "lanes=2" in summary
     assert "road_edges=1" in summary
-    assert "RBD_low_road_edge_count=1/expected_min=2" in summary
+    assert "RBD_low_road_edge_count" not in summary

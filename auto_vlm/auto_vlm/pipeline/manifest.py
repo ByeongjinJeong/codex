@@ -12,8 +12,6 @@ from auto_vlm.models.evidence import FrameEvidencePackage
 from auto_vlm.models.results import PackageReviewResult
 from auto_vlm.utils.errors import ToolError
 from auto_vlm.vlm.review_validator import ReviewQualityReport, empty_review_quality_report
-from auto_vlm.vlm.runner import FeatureRunSummary
-from auto_vlm.vlm.cross_feature_audit import CrossFeatureAuditSummary
 
 
 def write_run_manifest(
@@ -29,8 +27,6 @@ def write_run_manifest(
     review_results_json: Path | None,
     review_results: dict[str, PackageReviewResult],
     review_quality: ReviewQualityReport | None = None,
-    feature_review: FeatureRunSummary | None = None,
-    cross_feature_audit: CrossFeatureAuditSummary | None = None,
     reuse_existing_artifacts: bool = False,
     reused_artifact_packages: int = 0,
     generated_artifact_packages: int = 0,
@@ -49,8 +45,6 @@ def write_run_manifest(
         review_results_json=review_results_json,
         review_results=review_results,
         review_quality=review_quality,
-        feature_review=feature_review,
-        cross_feature_audit=cross_feature_audit,
         reuse_existing_artifacts=reuse_existing_artifacts,
         reused_artifact_packages=reused_artifact_packages,
         generated_artifact_packages=generated_artifact_packages,
@@ -71,15 +65,12 @@ def build_run_manifest(
     review_results_json: Path | None,
     review_results: dict[str, PackageReviewResult],
     review_quality: ReviewQualityReport | None = None,
-    feature_review: FeatureRunSummary | None = None,
-    cross_feature_audit: CrossFeatureAuditSummary | None = None,
     reuse_existing_artifacts: bool = False,
     reused_artifact_packages: int = 0,
     generated_artifact_packages: int = 0,
 ) -> dict[str, Any]:
     output_root = Path(output_dir)
     review_quality = review_quality or empty_review_quality_report()
-    cross_feature_audit = cross_feature_audit or CrossFeatureAuditSummary()
     report_paths = {
         "result_xlsx": _path_value(result_xlsx),
         "summary_html": _path_value(summary_html),
@@ -128,23 +119,17 @@ def build_run_manifest(
                 {"review_tasks_json": _path_value(review_tasks_json)},
             ),
             _stage(
-                "feature_vlm_review",
-                _feature_review_status(feature_review, review_results_json),
-                feature_review.as_dict() if feature_review else {"responses_total": len(review_results)},
+                "review_results",
+                "completed" if review_results_json else "pending",
+                {"review_results": len(review_results)},
             ),
             _stage(
-                "feature_result_validation",
+                "review_quality",
                 review_quality.status,
                 {
                     "errors": len(review_quality.errors),
                     "warnings": len(review_quality.warnings),
-                    "retryable_failures": len(review_quality.as_dict()["retryable_failures"]),
                 },
-            ),
-            _stage(
-                "cross_feature_audit",
-                _audit_stage_status(cross_feature_audit, review_results),
-                cross_feature_audit.as_dict(),
             ),
             _stage(
                 "reports",
@@ -163,13 +148,6 @@ def build_run_manifest(
             for package in packages
         ],
         "review_provenance": _review_provenance_summary(review_results),
-        "feature_review": feature_review.as_dict() if feature_review else {
-            "tasks_total": 0,
-            "responses_total": len(review_results),
-            "retryable_failures": [],
-            "non_retryable_failures": [],
-        },
-        "cross_feature_audit": cross_feature_audit.as_dict(),
         "review_quality": review_quality.as_dict(),
         "errors": error_rows,
     }
@@ -194,32 +172,6 @@ def _report_stage_status(
     if not review_results:
         return "pending_review"
     return "failed"
-
-
-def _feature_review_status(
-    feature_review: FeatureRunSummary | None,
-    review_results_json: Path | None,
-) -> str:
-    if feature_review is None:
-        return "completed" if review_results_json else "pending"
-    if feature_review.non_retryable_failures:
-        return "failed"
-    if feature_review.retryable_failures:
-        return "retryable_failed"
-    return "completed"
-
-
-def _audit_stage_status(
-    audit: CrossFeatureAuditSummary,
-    review_results: dict[str, PackageReviewResult],
-) -> str:
-    if not review_results:
-        return "pending"
-    if audit.conflicts:
-        return "conflict"
-    if audit.rerun_required:
-        return "rerun_required"
-    return "accepted"
 
 
 def _review_provenance_summary(results: dict[str, PackageReviewResult]) -> dict[str, Any]:

@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.evidence import EvidenceIntegrity, JsonFrameMatchStatus, JsonParseStatus
 
 
@@ -121,11 +120,6 @@ def summarize_frame_json(data: dict[str, Any], focus_feature: str = "ALL") -> st
     if abnormal:
         parts.append("status=" + ",".join(abnormal[:5]))
 
-    od_hints = _od_issue_hints(data)
-    parts.extend(od_hints)
-    rbd_hints = _rbd_issue_hints(counts)
-    parts.extend(rbd_hints)
-
     feature_hint = _feature_specific_hint(data, focus_feature)
     if feature_hint:
         parts.append(feature_hint)
@@ -201,171 +195,17 @@ def _collect_status_hints(data: Any) -> list[str]:
 
 
 def _feature_specific_hint(data: dict[str, Any], focus_feature: str) -> str:
-    features = _selected_focus_features(focus_feature)
-    hints = []
-    if "OD" in features:
+    feature = (focus_feature or "ALL").upper()
+    if feature == "OD":
         classes = _collect_values_by_key(data, ["class", "class_name", "type"])[:8]
-        if classes:
-            hints.append("OD_classes=" + ",".join(map(str, classes)))
-    for feature in ("LD", "RBD"):
-        if feature in features:
-            lane_ids = _collect_values_by_key(data, ["track_id", "lane_id", "id"])[:8]
-            if lane_ids:
-                hints.append(f"{feature}_ids=" + ",".join(map(str, lane_ids)))
-    for feature in ("TS", "TL"):
-        if feature not in features:
-            continue
+        return "OD_classes=" + ",".join(map(str, classes)) if classes else ""
+    if feature in {"LD", "RBD"}:
+        lane_ids = _collect_values_by_key(data, ["track_id", "lane_id", "id"])[:8]
+        return f"{feature}_ids=" + ",".join(map(str, lane_ids)) if lane_ids else ""
+    if feature in {"TS", "TL"}:
         states = _collect_values_by_key(data, ["sign_name", "struct_state", "state"])[:8]
-        if states:
-            hints.append(f"{feature}_states=" + ",".join(map(str, states)))
-    return "; ".join(hints)
-
-
-def _selected_focus_features(focus_feature: str) -> set[str]:
-    normalized = normalize_review_features(focus_feature)
-    if normalized == "ALL":
-        return {"OD", "LD", "RBD", "TS", "TL"}
-    return set(normalized.split(","))
-
-
-def _od_issue_hints(data: dict[str, Any]) -> list[str]:
-    objects = _qv_objects(data)
-    if not objects:
-        return []
-
-    hints: list[str] = []
-    heading_samples = []
-    for obj in objects[:8]:
-        obj_id = obj.get("VIS_OBJ_ID")
-        physical = obj.get("VIS_OBJ_Physical_State")
-        motion = obj.get("VIS_OBJ_Motion_State")
-        if not isinstance(physical, dict) or not isinstance(motion, dict):
-            continue
-        heading = physical.get("Heading")
-        orientation = motion.get("Motion_Orientation")
-        if obj_id is not None and heading is not None and orientation is not None:
-            heading_samples.append(f"{obj_id}:{_round_float(heading)}/o{orientation}")
-    if heading_samples:
-        hints.append("OD_heading_samples=" + ",".join(heading_samples))
-
-    overlap_candidates = _od_bbox_overlap_candidates(objects)
-    if overlap_candidates:
-        hints.append("OD_bbox_overlap_candidates=" + ",".join(overlap_candidates[:5]))
-    large_bbox_candidates = _od_large_bbox_candidates(objects)
-    if large_bbox_candidates:
-        hints.append("OD_large_bbox_candidates=" + ",".join(large_bbox_candidates[:5]))
-    return hints
-
-
-def _rbd_issue_hints(counts: dict[str, int]) -> list[str]:
-    """Return compact RBD cues that need visual adjudication."""
-    road_edges = counts.get("road_edges", 0)
-    lanes = counts.get("lanes", 0)
-    if lanes > 0 and road_edges < 2:
-        return [f"RBD_low_road_edge_count={road_edges}/expected_min=2"]
-    return []
-
-
-def _qv_objects(data: dict[str, Any]) -> list[dict[str, Any]]:
-    section = data.get("avi_objects")
-    if not isinstance(section, dict):
-        return []
-    objects = section.get("VIS_OBJ_Element")
-    if not isinstance(objects, list):
-        return []
-    return [item for item in objects if isinstance(item, dict)]
-
-
-def _od_bbox_overlap_candidates(objects: list[dict[str, Any]]) -> list[str]:
-    boxes = _od_image_boxes(objects)
-    candidates: list[str] = []
-    for index, left in enumerate(boxes):
-        for right in boxes[index + 1 :]:
-            overlap_area = _intersection_area(left["box"], right["box"])
-            if overlap_area <= 0:
-                continue
-            smaller_area = min(left["area"], right["area"])
-            union_area = left["area"] + right["area"] - overlap_area
-            min_overlap = overlap_area / smaller_area if smaller_area else 0.0
-            iou = overlap_area / union_area if union_area else 0.0
-            if not ((min_overlap >= 0.45 and iou >= 0.05) or iou >= 0.25):
-                continue
-            candidates.append(
-                f"{left['id']}-{right['id']}:min_overlap={min_overlap:.2f},iou={iou:.2f}"
-            )
-    return candidates
-
-
-def _od_large_bbox_candidates(objects: list[dict[str, Any]]) -> list[str]:
-    """Return object ids whose image box is unusually large for a single-frame check."""
-    boxes = _od_image_boxes(objects)
-    if not boxes:
-        return []
-
-    max_x = max(box["box"][2] for box in boxes)
-    max_y = max(box["box"][3] for box in boxes)
-    frame_area = max_x * max_y
-    if frame_area <= 0:
-        return []
-
-    candidates: list[str] = []
-    for box in boxes:
-        x0, y0, x1, y1 = box["box"]
-        width = x1 - x0
-        height = y1 - y0
-        area_ratio = box["area"] / frame_area
-        width_ratio = width / max_x if max_x else 0.0
-        height_ratio = height / max_y if max_y else 0.0
-        if area_ratio < 0.12 and width_ratio < 0.30 and height_ratio < 0.45:
-            continue
-        candidates.append(
-            f"{box['id']}:w={width_ratio:.2f},h={height_ratio:.2f},area={area_ratio:.2f}"
-        )
-    return candidates
-
-
-def _od_image_boxes(objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    boxes = []
-    for obj in objects:
-        coords = obj.get("VIS_OBJ_Image_Coordinates")
-        if not isinstance(coords, dict):
-            continue
-        xs = [value for key, value in coords.items() if key.endswith("_X") and isinstance(value, (int, float))]
-        ys = [value for key, value in coords.items() if key.endswith("_Y") and isinstance(value, (int, float))]
-        if not xs or not ys:
-            continue
-        width = max(xs) - min(xs)
-        height = max(ys) - min(ys)
-        if width <= 0 or height <= 0:
-            continue
-        boxes.append(
-            {
-                "id": obj.get("VIS_OBJ_ID"),
-                "class": obj.get("VIS_OBJ_Object_Class"),
-                "box": (min(xs), min(ys), max(xs), max(ys)),
-                "area": width * height,
-            }
-        )
-    return boxes
-
-
-def _intersection_area(
-    left: tuple[float, float, float, float],
-    right: tuple[float, float, float, float],
-) -> float:
-    x0 = max(left[0], right[0])
-    y0 = max(left[1], right[1])
-    x1 = min(left[2], right[2])
-    y1 = min(left[3], right[3])
-    if x1 <= x0 or y1 <= y0:
-        return 0.0
-    return (x1 - x0) * (y1 - y0)
-
-
-def _round_float(value: Any) -> str:
-    if not isinstance(value, (int, float)):
-        return str(value)
-    return f"{value:.2f}"
+        return f"{feature}_states=" + ",".join(map(str, states)) if states else ""
+    return ""
 
 
 def _collect_values_by_key(data: Any, names: list[str]) -> list[Any]:

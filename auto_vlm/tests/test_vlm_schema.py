@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from auto_vlm.vlm.contract import build_vlm_prompt_payload, write_vlm_review_packet
-from auto_vlm.vlm.review_tasks import build_review_tasks
-from auto_vlm.models.evidence import CandidateEvidencePacket, EvidenceIntegrity, FeatureEvidencePacket, FrameEvidencePackage, VideoMetadata
+from auto_vlm.models.evidence import EvidenceIntegrity, FeatureEvidencePacket, FrameEvidencePackage, VideoMetadata
 from auto_vlm.models.results import Confidence, Judgment, ReviewPriority, SuspiciousType
 from auto_vlm.models.vlm import Feature, VlmEvaluationResult
+from auto_vlm.vlm.contract import build_vlm_prompt_payload, write_vlm_review_packet
+from auto_vlm.vlm.review_tasks import build_review_tasks
 
 
 def _package(focus_feature: str = "ALL") -> FrameEvidencePackage:
@@ -62,10 +62,8 @@ def _package_with_json_summary(json_summary: str, focus_feature: str = "ALL") ->
     )
 
 
-def _package_with_candidate_packet() -> FrameEvidencePackage:
-    package = _package_with_json_summary(
-        "objects=11; OD_bbox_overlap_candidates=171-183:min_overlap=0.79,iou=0.15"
-    )
+def _package_with_feature_packet() -> FrameEvidencePackage:
+    package = _package()
     return FrameEvidencePackage(
         package_id=package.package_id,
         case_id=package.case_id,
@@ -81,27 +79,6 @@ def _package_with_candidate_packet() -> FrameEvidencePackage:
         evidence_integrity=package.evidence_integrity,
         focus_feature=package.focus_feature,
         json_summary=package.json_summary,
-        candidate_evidence_packets=(
-            CandidateEvidencePacket(
-                candidate_id="OD_BBOX_DUP_171_183",
-                package_id=package.package_id,
-                feature="OD",
-                issue_type="DEF-OD-BBOX-DUP",
-                object_ids=("171", "183"),
-                source="OD_bbox_overlap_candidates",
-                raw_frame_image=Path("raw_frame.jpg"),
-                qv_overlay_frame_image=Path("qv_frame.jpg"),
-                ics_crop_image=Path("OD_BBOX_DUP_171_183__ics.jpg"),
-                ics_crop_status="available",
-                candidate_json_values=Path("OD_BBOX_DUP_171_183__json.json"),
-                packet_markdown=Path("OD_BBOX_DUP_171_183.md"),
-                json_summary=package.json_summary or "",
-                candidate_review_summary=(
-                    "BEV_PRECHECK=cleared; delta_long=5.000m; delta_lat=2.000m; "
-                    "BEV separates the objects"
-                ),
-            ),
-        ),
         feature_evidence_packets=(
             FeatureEvidencePacket(
                 package_id=package.package_id,
@@ -111,7 +88,6 @@ def _package_with_candidate_packet() -> FrameEvidencePackage:
                 json_snippet=Path("frame.json"),
                 json_summary=package.json_summary or "",
                 evaluated_issue_types=("DEF-OD-BBOX-DUP", "DEF-OD-BBOX-FIT"),
-                candidate_packet_paths=(Path("OD_BBOX_DUP_171_183.md"),),
                 packet_markdown=Path("OD.md"),
             ),
         ),
@@ -179,14 +155,12 @@ def test_prompt_payload_consumes_frame_evidence_package_only():
     assert payload["raw_frame_image"] == "raw_frame.jpg"
     assert payload["qv_overlay_frame_image"] == "qv_frame.jpg"
     assert payload["json_summary"] == "objects=3; lanes=4"
+    assert payload["evaluation_scope"] == {}
+    assert "review_cues" not in payload
+    assert "candidate_evidence_packets" not in payload
     assert "invent JSON values" in payload["instructions"]["must_not"][1]
     assert any("every issue type" in item for item in payload["instructions"]["compare_order"])
     assert any("BEV/world-space" in item and "JSON physical values" in item for item in payload["instructions"]["compare_order"])
-    assert any("coarse symptoms" in item for item in payload["instructions"]["must_not"])
-    assert any("ICS/image overlay looks correct" in item for item in payload["instructions"]["must_not"])
-    assert any("ICS/image overlay" in item for item in payload["adas_review_workflow"])
-    assert any("BEV/world-space" in item for item in payload["adas_review_workflow"])
-    assert any("ICS/image overlay looks correct" in item for item in payload["adas_must_not"])
     assert [context["feature"] for context in payload["feature_review_contexts"]] == [
         "OD",
         "LD",
@@ -224,22 +198,20 @@ def test_write_vlm_review_packet_creates_llm_ready_markdown(tmp_path):
     assert "qv_overlay_frame_image: qv_frame.jpg" in text
     assert "## ADAS Vision Review Workflow" in text
     assert "## Feature Review Context" in text
+    assert "## Machine-Detected Review Cues" not in text
+    assert "candidate_adjudications" not in text
     assert "### OD" in text
     assert "docs/references/regression_issue_types/od.md" in text
-    assert "evaluate every issue type listed in each feature review context" in text
-    assert "Do not stop when ICS looks correct" in text
-    assert "BEV/JSON can reveal physical-value issues" in text
-    assert "prefer OD heading angle or OD BBOX duplication" in text
-    assert "evaluated_issue_types: [DEF-* ids evaluated in this review mode]" in text
-    assert "triggered_issue_types: [evaluated DEF-* ids judged present, or []]" in text
-    assert "observed_evidence: must explicitly cite raw frame evidence, QV overlay evidence, and JSON summary/snippet evidence" in text
+    assert "evaluated_issue_types" in text
+    assert "triggered_issue_types" in text
+    assert "observed_evidence" in text
+    assert "evaluation_scope" in text
 
 
-def test_write_vlm_review_packet_lifts_json_issue_hints_into_required_cues(tmp_path):
+def test_write_vlm_review_packet_does_not_lift_json_issue_hints(tmp_path):
     packet = write_vlm_review_packet(
         _package_with_json_summary(
             "objects=11; lanes=2; road_edges=0; "
-            "OD_heading_samples=171:-3.13/o6; "
             "OD_bbox_overlap_candidates=171-183:min_overlap=0.79,iou=0.15; "
             "OD_large_bbox_candidates=60:w=0.30,h=0.51,area=0.16"
         ),
@@ -247,99 +219,29 @@ def test_write_vlm_review_packet_lifts_json_issue_hints_into_required_cues(tmp_p
     )
 
     text = packet.read_text(encoding="utf-8")
-    assert "## Machine-Detected Review Cues" in text
-    assert "DEF-OD-HEADING" in text
-    assert "Compare the visible travel direction in the raw frame with the BEV/VCS object orientation" in text
-    assert "trigger DEF-OD-HEADING even when the bbox-fit issue is also present" in text
-    assert "DEF-OD-BBOX-DUP" in text
-    assert "ICS/image overlap is only a review cue, never sufficient evidence for duplication" in text
-    assert "BEV/VCS separates them, clear that pair" in text
-    assert "DEF-OD-BBOX-FIT" in text
-    assert "Large image coverage is only a review cue, never sufficient evidence for a bbox-fit issue" in text
-    assert "near-field large vehicle/object" in text
-    assert "also evaluate and trigger DEF-OD-HEADING instead of reporting only BBOX-FIT" in text
-    assert "DEF-LD-RBD-FN" in text
-    assert "Treat machine-detected review cues as required checks" in text
+    assert "Machine-Detected Review Cues" not in text
+    assert "Create one candidate_adjudication" not in text
+    assert "OD_bbox_overlap_candidates" in text
 
 
-def test_write_vlm_review_packet_is_short_index_when_candidate_packets_exist(tmp_path):
-    packet = write_vlm_review_packet(_package_with_candidate_packet(), tmp_path / "vlm_packets")
+def test_write_vlm_review_packet_is_short_index_when_feature_packets_exist(tmp_path):
+    packet = write_vlm_review_packet(_package_with_feature_packet(), tmp_path / "vlm_packets")
 
     text = packet.read_text(encoding="utf-8")
     assert "VLM Review Index" in text
     assert "OD.md" in text
-    assert "OD_BBOX_DUP_171_183.md" in text
-    assert "OD_BBOX_DUP_171_183__ics.jpg" in text
-    assert "BEV_PRECHECK=cleared" in text
-    assert "Do not apply one fixed plane order to every issue" in text
-    assert "BEV/VCS before ICS confirmation" in text
-    assert "JSON is the SW output being reviewed" in text
-    assert "## Feature Review Context" not in text
-    assert "docs/references/regression_issue_types/od.md" not in text
-    assert len(text.splitlines()) < 110
+    assert "Candidate Deep-Dive Packets" not in text
+    assert "candidate" not in text.lower()
 
 
-def test_write_vlm_review_packet_lifts_low_road_edge_count_into_rbd_cue(tmp_path):
-    packet = write_vlm_review_packet(
-        _package_with_json_summary(
-            "objects=11; lanes=2; road_edges=1; "
-            "RBD_low_road_edge_count=1/expected_min=2"
-        ),
-        tmp_path / "vlm_packets",
-    )
-
-    text = packet.read_text(encoding="utf-8")
-    assert "RBD_low_road_edge_count is present" in text
-    assert "DEF-LD-RBD-FN" in text
-    assert "DEF-LD-RBD-RANGE" in text
-    assert "partial miss" in text
-
-
-def test_review_tasks_include_large_bbox_candidate_obligation():
-    tasks = build_review_tasks(
-        [
-            _package_with_json_summary(
-                "objects=8; lanes=2; "
-                "OD_large_bbox_candidates=60:w=0.30,h=0.51,area=0.15"
-            )
-        ]
-    )
-
-    candidate = tasks["packages"][0]["candidate_tasks"][0]
-    assert candidate["task_id"] == "OD_BBOX_FIT_LARGE_60"
-    assert candidate["feature"] == "OD"
-    assert candidate["issue_type"] == "DEF-OD-BBOX-FIT"
-    assert candidate["object_ids"] == ["60"]
-    assert candidate["source"] == "OD_large_bbox_candidates"
-    assert "DEF-OD-BBOX-FIT" in candidate["decision_rule"]
-    assert "OD_large_bbox_candidates" in candidate["decision_rule"]
-    assert candidate["evidence_strategy"]["issue_type"] == "DEF-OD-BBOX-FIT"
-    assert "raw object shape" in candidate["evidence_strategy"]["primary_discovery"]
-
-
-def test_review_tasks_include_low_road_edge_candidate_obligation():
-    tasks = build_review_tasks(
-        [
-            _package_with_json_summary(
-                "objects=8; lanes=2; road_edges=1; "
-                "RBD_low_road_edge_count=1/expected_min=2"
-            )
-        ]
-    )
-
-    candidate = tasks["packages"][0]["candidate_tasks"][0]
-    assert candidate["task_id"] == "RBD_LOW_ROAD_EDGE_COUNT_1_OF_2"
-    assert candidate["feature"] == "RBD"
-    assert candidate["issue_type"] == "DEF-LD-RBD-FN"
-    assert candidate["object_ids"] == []
-    assert candidate["source"] == "RBD_low_road_edge_count"
-    assert "DEF-LD-RBD-FN" in candidate["decision_rule"]
-    assert "RBD_low_road_edge_count" in candidate["decision_rule"]
-
-
-def test_review_tasks_include_issue_specific_evidence_strategy_for_bev_first_items():
+def test_review_tasks_include_feature_tasks_without_candidate_tasks():
     tasks = build_review_tasks([_package_with_json_summary("objects=8; lanes=2")])
 
+    assert tasks["counts"]["packages"] == 1
+    assert tasks["counts"]["feature_tasks"] == 5
+    assert "candidate_tasks" not in tasks["counts"]
+    assert "candidate_tasks" not in tasks["packages"][0]
+    assert "evaluation_scope" in tasks["packages"][0]["evidence"]
     od_task = next(
         item
         for item in tasks["packages"][0]["feature_tasks"]
@@ -353,9 +255,3 @@ def test_review_tasks_include_issue_specific_evidence_strategy_for_bev_first_ite
     assert "DEF-OD-HEADING" in strategies
     assert strategies["DEF-OD-HEADING"]["review_order"] == ["raw_context", "bev_vcs", "json", "ics"]
     assert "BEV/VCS geometry" in strategies["DEF-OD-HEADING"]["primary_discovery"]
-
-
-def test_review_tasks_follow_multiple_focus_features():
-    tasks = build_review_tasks([_package_with_json_summary("objects=8; lanes=2", focus_feature="OD,RBD")])
-
-    assert [task["feature"] for task in tasks["packages"][0]["feature_tasks"]] == ["OD", "RBD"]

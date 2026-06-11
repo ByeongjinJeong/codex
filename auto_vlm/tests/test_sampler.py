@@ -25,11 +25,18 @@ def test_range_sampling_uses_start_and_end():
     assert result.frames == (10, 15, 20)
 
 
-def test_full_video_interval_sampling_starts_at_interval():
-    result = resolve_sampled_frames(SamplingRequest(sampling_frame=3), frame_count=10)
+def test_full_video_interval_sampling_starts_at_default_stabilized_frame():
+    result = resolve_sampled_frames(SamplingRequest(sampling_frame=50), frame_count=220)
 
     assert result.mode == SamplingMode.FULL_VIDEO_INTERVAL
-    assert result.frames == (3, 6, 9)
+    assert result.frames == (100, 150, 200)
+
+
+def test_explicit_start_frame_overrides_default_stabilized_frame():
+    result = resolve_sampled_frames(SamplingRequest(start_frame=20, sampling_frame=50), frame_count=160)
+
+    assert result.mode == SamplingMode.RANGE_INTERVAL
+    assert result.frames == (20, 70, 120)
 
 
 def test_range_bounds_are_clamped():
@@ -46,6 +53,7 @@ def test_short_video_returns_available_frames_only():
     result = resolve_sampled_frames(SamplingRequest(sampling_frame=20), frame_count=3)
 
     assert result.frames == (2,)
+    assert "start_frame is beyond the video and was clamped to final frame" in result.warnings
 
 
 def test_unreadable_video_returns_empty_with_warning():

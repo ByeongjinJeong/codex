@@ -7,11 +7,6 @@ Purpose:
 - It explains what each feature and issue type means based on existing rules and workbook usage.
 - It does not define the final pass/fail decision for a specific customer issue. Final judgment still requires issue text, video, raw JSON, preprocessed values, reference/filter JSON, frame range, and target ID/lane.
 
-Sync rule:
-- The Korean file `../regression_feature_issue_type_definitions_ko.md` remains the user-review source.
-- If the Korean file is edited, update the matching Section IDs in this split English reference set.
-- The index file `../regression_feature_issue_type_definitions_en.md` points to these canonical split English files.
-
 Sources inspected:
 - Repo: `C:\Users\Byeongjin Jeong\Desktop\git\Regression_automation_tool`
 - Main evidence:
@@ -62,9 +57,8 @@ Definition:
 Review focus:
 - whether bbox covers the target appropriately.
 - whether front/rear/top/bottom projected corners align with the object in video.
-- For `OD_large_bbox_candidates`, large image coverage is only a review cue. It is
-  not a bbox-fit issue by itself when a near-field large vehicle/object naturally
-  occupies a large part of the frame.
+- Large image coverage is not a bbox-fit issue by itself when a near-field large
+  vehicle/object naturally occupies a large part of the frame.
 - Mark DEF-OD-BBOX-FIT only when raw/QV geometry visibly extends beyond, misses,
   or misaligns with the real object shape after considering near-field perspective
   and partial out-of-image cases.
@@ -89,11 +83,11 @@ Review focus:
 - whether two outputs indicate the same physical object.
 - whether two different real objects naturally overlap.
 - whether IDs are duplicated/split.
-- For `OD_bbox_overlap_candidates`, inspect BEV/world-space placement before clearing
-  the cue. ICS/image-space overlap is only a review cue, not sufficient evidence
-  for duplication. BEV duplication is the stronger signal that two outputs occupy
+- Inspect BEV/world-space placement before clearing apparent ICS/image-space
+  overlap. ICS/image-space overlap alone is not sufficient evidence for
+  duplication. BEV duplication is the stronger signal that two outputs occupy
   the same object/location.
-- Clear the overlap candidate when the raw frame shows different physical objects,
+- Clear apparent overlap when the raw frame shows different physical objects,
   natural perspective overlap, or BEV/VCS separates the object locations.
 - Do not clear BBOX duplication from ICS/image-space alone when BEV shows overlapping
   or split boxes for the same physical target.

@@ -61,10 +61,3 @@ Policy:
 - Run-specific judgments belong in outputs/<run_name>/llm_review_results.json, not in this directory.
 ```
 
-Sync rule:
-
-```text
-The Korean aggregate file ../regression_feature_issue_type_definitions_ko.md remains the user-review source.
-When it changes, update the matching Section IDs in these split English files.
-```
-

@@ -9,22 +9,18 @@ from auto_vlm.conversion.raw_video import remux_h264_to_mp4
 from auto_vlm.conversion.video import extract_center_frame, read_video_metadata
 from auto_vlm.conversion.json_matcher import match_frame_json
 from auto_vlm.evidence.builder import build_frame_evidence_package
-from auto_vlm.evidence.candidate_packets import write_candidate_evidence_packets
 from auto_vlm.evidence.feature_packets import write_feature_evidence_packets
 from auto_vlm.inputs.excel import load_cases
 from auto_vlm.sampling.sampler import resolve_sampled_frames
 from auto_vlm.vlm.contract import write_vlm_review_packet
+from auto_vlm.vlm.evaluation_scope import build_evaluation_scope
 from auto_vlm.vlm.result_loader import ReviewResultLoadError, filter_results_for_packages, load_review_results
 from auto_vlm.vlm.review_validator import (
     ReviewQualityReport,
     empty_review_quality_report,
     validate_review_quality,
-    write_review_validation_artifacts,
 )
 from auto_vlm.vlm.review_tasks import write_review_tasks
-from auto_vlm.vlm.providers import ManualResponseProvider
-from auto_vlm.vlm.runner import FeatureRunSummary, merge_feature_responses, run_feature_reviews
-from auto_vlm.vlm.cross_feature_audit import CrossFeatureAuditSummary, write_cross_feature_audits
 from auto_vlm.models.evidence import EvidenceIntegrity, FrameEvidencePackage, VideoMetadata
 from auto_vlm.models.results import PackageReviewResult
 from auto_vlm.pipeline.manifest import write_run_manifest
@@ -44,8 +40,6 @@ class EngineResult:
     review_results_json: Path | None = None
     review_results: dict[str, PackageReviewResult] = field(default_factory=dict)
     review_quality: ReviewQualityReport = field(default_factory=empty_review_quality_report)
-    feature_review: FeatureRunSummary | None = None
-    cross_feature_audit: CrossFeatureAuditSummary = field(default_factory=CrossFeatureAuditSummary)
     reused_artifact_packages: int = 0
     generated_artifact_packages: int = 0
 
@@ -54,10 +48,7 @@ def run_excel_batch(
     input_path: str | Path,
     output_dir: str | Path,
     review_results_path: str | Path | None = None,
-    feature_responses_path: str | Path | None = None,
     reuse_existing_artifacts: bool = False,
-    reuse_feature_responses: bool = False,
-    retry_failed_feature_reviews: bool = False,
 ) -> EngineResult:
     output_root = Path(output_dir)
     adapter_result = load_cases(input_path)
@@ -131,19 +122,17 @@ def run_excel_batch(
                     output_root,
                     reuse_existing_artifacts,
                 )
-                candidate_packets = write_candidate_evidence_packets(
+                package = replace(
                     package,
-                    output_root / "cases" / case.case_id,
+                    evaluation_scope=build_evaluation_scope(package.json_snippet),
                 )
                 feature_packets = write_feature_evidence_packets(
                     package,
                     output_root / "cases" / case.case_id,
-                    candidate_packets=candidate_packets,
                 )
                 package = replace(
                     package,
                     feature_evidence_packets=feature_packets,
-                    candidate_evidence_packets=candidate_packets,
                 )
                 write_vlm_review_packet(
                     package,
@@ -166,27 +155,7 @@ def run_excel_batch(
 
     loaded_results: dict[str, PackageReviewResult] = {}
     review_tasks_json = write_review_tasks(output_root / "review_tasks.json", packages) if packages else None
-    feature_review_summary: FeatureRunSummary | None = None
     review_artifact = Path(review_results_path) if review_results_path else output_root / "llm_review_results.json"
-    if packages and feature_responses_path:
-        tasks_root = output_root / "model" / "tasks"
-        responses_root = output_root / "model" / "responses"
-        if not reuse_feature_responses:
-            feature_review_summary = run_feature_reviews(
-                tasks_root,
-                responses_root,
-                ManualResponseProvider(Path(feature_responses_path)),
-                retry_failed=retry_failed_feature_reviews,
-            )
-        else:
-            response_count = len(list(responses_root.glob("*/*.json"))) if responses_root.exists() else 0
-            task_count = len(list(tasks_root.glob("*/*.json"))) if tasks_root.exists() else 0
-            feature_review_summary = FeatureRunSummary(task_count, response_count)
-        merge_feature_responses(
-            responses_root,
-            review_artifact,
-            [package.package_id for package in packages],
-        )
     if review_artifact.exists():
         try:
             loaded_results = filter_results_for_packages(
@@ -205,18 +174,6 @@ def run_excel_batch(
                 )
             )
     review_quality = validate_review_quality(packages, loaded_results)
-    if loaded_results:
-        write_review_validation_artifacts(
-            output_root / "model" / "validation",
-            packages,
-            loaded_results,
-            review_quality,
-        )
-    audit_summary = (
-        write_cross_feature_audits(output_root / "model" / "audits", loaded_results)
-        if loaded_results
-        else CrossFeatureAuditSummary()
-    )
     result_xlsx = None
     summary_html = None
     if loaded_results:
@@ -249,8 +206,6 @@ def run_excel_batch(
         review_results_json=review_artifact if review_artifact.exists() else None,
         review_results=loaded_results,
         review_quality=review_quality,
-        feature_review=feature_review_summary,
-        cross_feature_audit=audit_summary,
         reuse_existing_artifacts=reuse_existing_artifacts,
         reused_artifact_packages=reused_artifact_packages,
         generated_artifact_packages=len(packages) - reused_artifact_packages,
@@ -265,8 +220,6 @@ def run_excel_batch(
         review_results_json=review_artifact if review_artifact.exists() else None,
         review_results=loaded_results,
         review_quality=review_quality,
-        feature_review=feature_review_summary,
-        cross_feature_audit=audit_summary,
         reused_artifact_packages=reused_artifact_packages,
         generated_artifact_packages=len(packages) - reused_artifact_packages,
     )

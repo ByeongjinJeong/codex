@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from auto_vlm.models.vlm import Feature, FeatureReviewContext
-from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.vlm.reference_context import (
     load_adas_must_not,
     load_adas_feature_checklist,
@@ -18,8 +17,8 @@ ACTIVE_FEATURES = (Feature.OD, Feature.LD, Feature.RBD, Feature.TS, Feature.TL)
 
 
 def build_feature_review_contexts(focus_feature: str) -> list[FeatureReviewContext]:
-    normalized = normalize_review_features(focus_feature)
-    selected = ACTIVE_FEATURES if normalized == Feature.ALL.value else tuple(Feature(item) for item in normalized.split(","))
+    feature = Feature(focus_feature)
+    selected = ACTIVE_FEATURES if feature == Feature.ALL else (feature,)
     unsupported = [item for item in selected if item not in ACTIVE_FEATURES]
     if unsupported:
         raise ValueError(f"unsupported VLM review feature: {unsupported[0].value}")

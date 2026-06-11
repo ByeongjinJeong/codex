@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
-from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.evidence import FrameEvidencePackage
-from auto_vlm.models.results import ACTIVE_REVIEW_FEATURES, FrameTestResult, PackageReviewResult
-from auto_vlm.vlm.candidates import obligations_from_json_summary
+from auto_vlm.models.results import ACTIVE_REVIEW_FEATURES, PackageReviewResult
 
 
 MOJIBAKE_MARKERS = ("À", "Á", "¿", "Ã", "½", "¾", "¹", "º", "Ä", "Ç")
@@ -21,9 +17,6 @@ JSON_EVIDENCE_MARKERS = (
     "road_edges=",
     "signs=",
     "lights=",
-    "OD_bbox_overlap_candidates=",
-    "OD_large_bbox_candidates=",
-    "OD_heading_samples=",
 )
 
 
@@ -68,23 +61,11 @@ class ReviewQualityReport:
             "errors": len(self.errors),
             "warnings": len(self.warnings),
             "findings": [finding.as_dict() for finding in self.findings],
-            "retryable_failures": [
-                finding.as_dict()
-                for finding in self.errors
-                if finding.package_id and finding.feature
-            ],
         }
 
 
 def empty_review_quality_report() -> ReviewQualityReport:
     return ReviewQualityReport(status="not_run")
-
-
-def _expected_review_features(focus_feature: str) -> set[str]:
-    normalized = normalize_review_features(focus_feature)
-    if normalized == "ALL":
-        return set(ACTIVE_REVIEW_FEATURES)
-    return set(normalized.split(","))
 
 
 def validate_review_quality(
@@ -125,34 +106,14 @@ def validate_review_quality(
         )
 
     summary_counts: dict[str, Counter[str]] = defaultdict(Counter)
-    pass_count = 0
-    package_count_with_candidates = 0
 
     for package in packages:
         result = results.get(package.package_id)
         if result is None:
             continue
-        if result.frame_result == FrameTestResult.PASS:
-            pass_count += 1
-
-        obligations = obligations_from_json_summary(package.json_summary)
-        if obligations:
-            package_count_with_candidates += 1
 
         features = {feature.feature: feature for feature in result.feature_results}
-        expected_features = _expected_review_features(package.focus_feature)
-        unexpected_features = sorted(set(features) - expected_features)
-        for feature in unexpected_features:
-            findings.append(
-                ReviewQualityFinding(
-                    code="unexpected_feature_review",
-                    severity="error",
-                    package_id=package.package_id,
-                    feature=feature,
-                    message="Feature result is outside the workbook focus_feature selection.",
-                )
-            )
-        missing_features = sorted(expected_features - set(features))
+        missing_features = sorted(ACTIVE_REVIEW_FEATURES - set(features))
         for feature in missing_features:
             findings.append(
                 ReviewQualityFinding(
@@ -160,7 +121,7 @@ def validate_review_quality(
                     severity="error",
                     package_id=package.package_id,
                     feature=feature,
-                    message="Review result is missing a row required by workbook focus_feature.",
+                    message="Full review mode requires OD, LD, RBD, TS, and TL feature rows.",
                 )
             )
 
@@ -177,28 +138,6 @@ def validate_review_quality(
             _validate_text_encoding(findings, package.package_id, feature_name, feature.inference, "inference")
             _validate_evidence_specificity(findings, package, feature_name, feature.observed_evidence)
 
-            for adjudication in feature.candidate_adjudications:
-                fields = [
-                    adjudication.raw_observation,
-                    adjudication.ics_observation,
-                    adjudication.bev_observation,
-                    adjudication.json_observation,
-                    adjudication.decision_reason,
-                    adjudication.summary,
-                    adjudication.observed_evidence,
-                    adjudication.inference,
-                    adjudication.uncertainty,
-                ]
-                for field_value in fields:
-                    _validate_text_encoding(
-                        findings,
-                        package.package_id,
-                        feature_name,
-                        field_value,
-                        f"candidate {adjudication.candidate_id}",
-                    )
-                _validate_candidate_specificity(findings, package.package_id, feature_name, adjudication)
-
     for feature_name, counter in summary_counts.items():
         for summary, count in counter.items():
             if count >= 3 and _looks_like_template_summary(summary):
@@ -214,57 +153,8 @@ def validate_review_quality(
                     )
                 )
 
-    if packages and pass_count == len(packages) and package_count_with_candidates:
-        findings.append(
-            ReviewQualityFinding(
-                code="suspicious_all_pass_with_candidates",
-                severity="warning",
-                message=(
-                    "All packages passed while machine-detected review candidates exist. "
-                    "This can be legitimate, but it needs reviewer attention."
-                ),
-            )
-        )
-
     status = "failed" if any(finding.severity == "error" for finding in findings) else "passed"
     return ReviewQualityReport(status=status, findings=tuple(findings))
-
-
-def write_review_validation_artifacts(
-    root: str | Path,
-    packages: list[FrameEvidencePackage],
-    results: dict[str, PackageReviewResult],
-    report: ReviewQualityReport,
-) -> int:
-    """Write one validation artifact per package + feature result."""
-    validation_root = Path(root)
-    validation_root.mkdir(parents=True, exist_ok=True)
-    findings_by_key: dict[tuple[str, str], list[ReviewQualityFinding]] = defaultdict(list)
-    for finding in report.findings:
-        findings_by_key[(finding.package_id, finding.feature)].append(finding)
-    written = 0
-    for package in packages:
-        result = results.get(package.package_id)
-        if result is None:
-            continue
-        package_dir = validation_root / package.package_id
-        package_dir.mkdir(parents=True, exist_ok=True)
-        for feature in result.feature_results:
-            findings = findings_by_key.get((package.package_id, feature.feature), [])
-            has_error = any(item.severity == "error" for item in findings)
-            payload = {
-                "package_id": package.package_id,
-                "feature": feature.feature,
-                "validation_status": "invalid" if has_error else "valid",
-                "retryable": has_error,
-                "findings": [item.as_dict() for item in findings],
-            }
-            (package_dir / f"{feature.feature}.json").write_text(
-                json.dumps(payload, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            written += 1
-    return written
 
 
 def _validate_text_encoding(
@@ -319,48 +209,6 @@ def _validate_evidence_specificity(
                 package_id=package.package_id,
                 feature=feature,
                 message="observed_evidence must cite concrete JSON summary keys, not only the word JSON.",
-            )
-        )
-
-
-def _validate_candidate_specificity(
-    findings: list[ReviewQualityFinding],
-    package_id: str,
-    feature: str,
-    adjudication: Any,
-) -> None:
-    text = " ".join(
-        [
-            adjudication.raw_observation,
-            adjudication.ics_observation,
-            adjudication.bev_observation,
-            adjudication.json_observation,
-            adjudication.decision_reason,
-            adjudication.summary,
-            adjudication.observed_evidence,
-            adjudication.inference,
-            adjudication.uncertainty,
-        ]
-    ).lower()
-    for object_id in adjudication.object_ids:
-        if object_id.lower() not in text:
-            findings.append(
-                ReviewQualityFinding(
-                    code="candidate_object_id_not_explained",
-                    severity="error",
-                    package_id=package_id,
-                    feature=feature,
-                    message=f"Candidate {adjudication.candidate_id} does not discuss object id {object_id}.",
-                )
-            )
-    if adjudication.candidate_id.lower() not in text:
-        findings.append(
-            ReviewQualityFinding(
-                code="candidate_id_not_explained",
-                severity="error",
-                package_id=package_id,
-                feature=feature,
-                message=f"Candidate {adjudication.candidate_id} is not named in its reasoning fields.",
             )
         )
 

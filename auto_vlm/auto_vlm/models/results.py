@@ -57,25 +57,6 @@ class SuspiciousType(str, Enum):
 
 
 @dataclass(frozen=True)
-class CandidateAdjudication:
-    candidate_id: str
-    feature: str
-    issue_type: str
-    object_ids: tuple[str, ...] = ()
-    result: str = "needs_review"
-    checked_planes: tuple[str, ...] = ()
-    raw_observation: str = ""
-    ics_observation: str = ""
-    bev_observation: str = ""
-    json_observation: str = ""
-    decision_reason: str = ""
-    summary: str = ""
-    observed_evidence: str = ""
-    inference: str = ""
-    uncertainty: str = ""
-
-
-@dataclass(frozen=True)
 class FeatureReviewResult:
     feature: str
     result: FrameTestResult = FrameTestResult.NEEDS_REVIEW
@@ -86,7 +67,6 @@ class FeatureReviewResult:
     observed_evidence: str = ""
     inference: str = ""
     uncertainty: str = ""
-    candidate_adjudications: tuple[CandidateAdjudication, ...] = ()
 
 
 @dataclass(frozen=True)

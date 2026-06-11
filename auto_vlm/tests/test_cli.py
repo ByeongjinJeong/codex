@@ -24,11 +24,7 @@ def test_run_command_is_reserved_for_phase1_engine():
             "cases.xlsx",
             "--review-results",
             "llm_review_results.json",
-            "--feature-responses",
-            "manual_responses",
             "--reuse-existing-artifacts",
-            "--reuse-feature-responses",
-            "--retry-failed-feature-reviews",
         ]
     )
 
@@ -37,19 +33,7 @@ def test_run_command_is_reserved_for_phase1_engine():
     assert args.input == "cases.xlsx"
     assert args.output is None
     assert args.review_results == "llm_review_results.json"
-    assert args.feature_responses == "manual_responses"
     assert args.reuse_existing_artifacts is True
-    assert args.reuse_feature_responses is True
-    assert args.retry_failed_feature_reviews is True
-
-
-def test_inspect_run_command_requires_run_dir():
-    parser = build_parser()
-
-    args = parser.parse_args(["inspect-run", "--run-dir", "outputs/run"])
-
-    assert args.command == "inspect-run"
-    assert args.run_dir == "outputs/run"
 
 
 def test_default_output_dir_uses_excel_name_and_current_datetime():

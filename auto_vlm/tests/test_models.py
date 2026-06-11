@@ -61,17 +61,6 @@ def test_evaluation_case_defaults_focus_feature_to_all():
     assert case.source_case_metadata()["external_metadata"]["unknown_column"] == "value"
 
 
-def test_evaluation_case_accepts_multiple_focus_features():
-    case = EvaluationCase(
-        case_id="CASE_001",
-        video_path=Path("sample.mp4"),
-        sampling_request=SamplingRequest(frame_list=(1,), sampling_frame=None),
-        focus_feature="OD,RBD",
-    )
-
-    assert case.focus_feature == "OD,RBD"
-
-
 def test_evaluation_case_requires_case_id():
     with pytest.raises(ValueError, match="case_id is required"):
         EvaluationCase(case_id="", video_path=Path("sample.mp4"), sampling_request=SamplingRequest())

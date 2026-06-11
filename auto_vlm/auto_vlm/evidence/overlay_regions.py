@@ -1,4 +1,4 @@
-"""QV overlay region extraction shared by feature and candidate evidence."""
+"""QV overlay region extraction helpers."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def write_object_ics_region(
     objects: list[dict[str, Any]],
     output_path: Path,
 ) -> tuple[Path | None, str]:
-    """Write a focused ICS/raw-layout crop around candidate object image boxes."""
+    """Write a focused ICS/raw-layout crop around object image boxes."""
     image, status = _load_overlay_image(package, image_path)
     if image is None:
         return None, status

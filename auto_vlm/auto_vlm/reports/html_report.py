@@ -8,7 +8,7 @@ from pathlib import Path
 
 from auto_vlm.models.evidence import FrameEvidencePackage
 from auto_vlm.models.results import FeatureReviewResult, FrameTestResult, PackageReviewResult
-from auto_vlm.reports.korean_text import feature_inference, feature_summary, feature_uncertainty
+from auto_vlm.reports.korean_text import feature_inference, feature_summary
 from auto_vlm.utils.errors import ToolError
 
 
@@ -167,11 +167,11 @@ def _render_feature_basis(
     blocks = [
         ("검출 이슈", ", ".join(feature.triggered_issue_types)),
         ("평가 이슈", ", ".join(feature.evaluated_issue_types)),
-        ("이슈 요약", feature_summary(package, feature)),
         ("Crop 산출물", _feature_crop_links(package, feature, output_dir)),
         ("판단 근거", feature_inference(package, feature)),
-        ("불확실성", feature_uncertainty(package, feature)),
     ]
+    if feature.result != FrameTestResult.PASS:
+        blocks.insert(2, ("이슈 요약", feature_summary(package, feature)))
     rendered = [
         _basis_block(title, value)
         for title, value in blocks

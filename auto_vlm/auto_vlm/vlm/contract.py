@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from auto_vlm.models.cases import normalize_review_features
 from auto_vlm.models.evidence import FrameEvidencePackage
 from auto_vlm.vlm.feature_context import build_feature_review_contexts
 from auto_vlm.vlm.reference_context import load_adas_common_workflow, load_adas_must_not
@@ -40,7 +39,7 @@ def build_vlm_prompt_payload(package: FrameEvidencePackage) -> dict[str, Any]:
         },
         "frame_metadata": package.frame_metadata,
         "json_summary": package.json_summary,
-        "review_cues": _review_cues(package.json_summary or "", package.focus_feature),
+        "evaluation_scope": package.evaluation_scope,
         "json_snippet": _path_string(package.json_snippet),
         "evidence_integrity": package.evidence_integrity.as_dict(),
         "adas_review_workflow": adas_review_workflow,
@@ -48,9 +47,6 @@ def build_vlm_prompt_payload(package: FrameEvidencePackage) -> dict[str, Any]:
         "feature_review_contexts": [context.as_dict() for context in feature_review_contexts],
         "feature_evidence_packets": [
             packet.as_dict() for packet in package.feature_evidence_packets
-        ],
-        "candidate_evidence_packets": [
-            packet.as_dict() for packet in package.candidate_evidence_packets
         ],
         "instructions": {
             "must_separate": ["observed_evidence", "inference", "uncertainty"],
@@ -104,15 +100,12 @@ def _render_review_packet(payload: dict[str, Any]) -> str:
             f"- qv_overlay_frame_image: {payload['qv_overlay_frame_image']}",
             f"- json_snippet: {payload['json_snippet']}",
             f"- json_summary: {payload['json_summary']}",
+            f"- evaluation_scope: {payload['evaluation_scope']}",
             f"- review_mode: {payload['review_mode']}",
             f"- lidar_overlay_path: {payload['gt_reference']['lidar_overlay_path']}",
             f"- lidar_json_dir: {payload['gt_reference']['lidar_json_dir']}",
             f"- lidar_json_path: {payload['gt_reference']['lidar_json_path']}",
             f"- evidence_integrity: {payload['evidence_integrity']}",
-            "",
-            "## Machine-Detected Review Cues",
-            "",
-            *_bullet_lines(payload["review_cues"]),
             "",
             "## ADAS Vision Review Workflow",
             "",
@@ -125,23 +118,15 @@ def _render_review_packet(payload: dict[str, Any]) -> str:
             "",
             *_render_feature_review_contexts(payload["feature_review_contexts"]),
             "",
-            "## Candidate Evidence Packets",
-            "",
-            *_render_candidate_evidence_packets(payload["candidate_evidence_packets"]),
-            "",
             "## LLM/VLM Task",
             "",
             "Review the raw source frame, QV overlay frame, JSON summary, and integrity flags.",
             "Use review_mode to decide the evaluable issue scope: gtless_single_frame uses raw/QV/JSON only; gt_reference may use provided LiDAR overlay/JSON reference evidence.",
-            "For each candidate, follow this order: raw observation, ICS observation, BEV overlay observation, JSON support check, then decision.",
             "JSON physical values support the BEV overlay observation. They must not replace BEV overlay inspection.",
+            "Use evaluation_scope only to decide whether an observed issue is reportable. It is not evidence that an issue exists.",
             "BEV/JSON can reveal physical-value issues only when JSON is used as support for inspected BEV evidence.",
             "Do not stop when ICS looks correct; BEV evidence can reveal physical-value issues in long/lat, C0-C3, heading, ID, range, class, confidence, or state.",
             "After evidence inspection, evaluate every issue type listed in each feature review context before assigning feature pass/fail.",
-            "Treat machine-detected review cues as required checks: either cite them as an issue or explain why the visual/JSON evidence clears them.",
-            "For each machine-detected candidate, write candidate_adjudications with raw_observation, ics_observation, bev_observation, json_observation, decision, decision_reason, and uncertainty.",
-            "Also include checked_planes for compatibility; raw, ics, bev_vcs, and json must all be present when those evidence planes are readable.",
-            "For OD_BBOX_DUP, issue only when raw/ICS and BEV overlay both support same-object duplicate. Clear when BEV overlay clearly separates the objects. Mark uncertain when BEV overlay is unreadable or unavailable.",
             "A feature-level pass means no defined issue type has observable evidence in raw/QV/JSON for that frame.",
             "Use the most specific issue type available; for example, prefer OD heading angle or OD BBOX duplication over generic OD FP when evidence supports it.",
             "Do not calculate GT accuracy. Do not invent JSON values.",
@@ -166,23 +151,6 @@ def _render_review_packet(payload: dict[str, Any]) -> str:
             "    observed_evidence: must explicitly cite raw frame evidence, QV overlay evidence, and JSON summary/snippet evidence for this feature",
             "    inference: explain why the cited evidence maps to pass/fail",
             "    uncertainty: state what remains limited by single-frame GT-less evidence",
-            "    candidate_adjudications:",
-            "      - candidate_id: OD_BBOX_DUP_<left_id>_<right_id>",
-            "        feature: OD",
-            "        issue_type: DEF-OD-BBOX-DUP",
-            "        object_ids: [<left_id>, <right_id>]",
-            "        decision: issue | cleared | uncertain",
-            "        result: issue | cleared | uncertain",
-            "        checked_planes: [raw, ics, bev_vcs, json]",
-            "        raw_observation:",
-            "        ics_observation:",
-            "        bev_observation:",
-            "        json_observation:",
-            "        decision_reason:",
-            "        summary:",
-            "        observed_evidence:",
-            "        inference:",
-            "        uncertainty:",
             "summary:",
             "observed_evidence:",
             "inference:",
@@ -198,7 +166,7 @@ def _render_short_index_packet(payload: dict[str, Any]) -> str:
         [
             f"# VLM Review Index: {payload['package_id']}",
             "",
-            "Use the feature packets as the primary LLM input, then use candidate packets for focused deep dives.",
+            "Use the feature packets as the primary VLM review input.",
             "This file is intentionally short so comprehensive review is procedural instead of one large prompt.",
             "",
             "## Frame Evidence",
@@ -209,24 +177,22 @@ def _render_short_index_packet(payload: dict[str, Any]) -> str:
             f"- qv_overlay_frame_image: {payload['qv_overlay_frame_image']}",
             f"- json_snippet: {payload['json_snippet']}",
             f"- json_summary: {payload['json_summary']}",
+            f"- evaluation_scope: {payload['evaluation_scope']}",
             "",
             "## Feature Sweep Packets",
             "",
             *_render_feature_evidence_packets(payload["feature_evidence_packets"]),
             "",
-            "## Candidate Deep-Dive Packets",
-            "",
-            *_render_candidate_evidence_packets(payload["candidate_evidence_packets"]),
             "## Mandatory Review Order",
             "",
             "1. Complete every feature sweep packet for OD, LD, RBD, TS, and TL.",
             "2. Within each feature, read the Issue Evidence Strategy section. Do not apply one fixed plane order to every issue.",
             "3. Use raw context first, then follow the issue-specific order; geometry/range/heading/role issues may require BEV/VCS before ICS confirmation.",
             "4. Evaluate every listed DEF-* issue type before assigning feature pass/fail.",
-            "5. Open candidate deep-dive packets for machine-detected cues and adjudicate them explicitly.",
-            "6. Aggregate feature results into llm_review_results.json.",
+            "5. Aggregate feature results into llm_review_results.json.",
             "",
             "JSON is the SW output being reviewed. Use it as supporting evidence, not as ground truth and not as a replacement for raw/ICS/BEV inspection.",
+            "Evaluation scope annotations define reportability range only. They must not create or suppress issues without VLM evidence.",
             "",
             "## Required Output Shape",
             "",
@@ -241,20 +207,6 @@ def _render_short_index_packet(payload: dict[str, Any]) -> str:
             "    observed_evidence:",
             "    inference:",
             "    uncertainty:",
-            "    candidate_adjudications:",
-            "      - candidate_id:",
-            "        feature:",
-            "        issue_type:",
-            "        object_ids:",
-            "        decision: issue | cleared | uncertain",
-            "        result: issue | cleared | uncertain",
-            "        checked_planes: [raw, ics, bev_vcs, json]",
-            "        raw_observation:",
-            "        ics_observation:",
-            "        bev_observation:",
-            "        json_observation:",
-            "        decision_reason:",
-            "        uncertainty:",
             "```",
             "",
         ]
@@ -277,48 +229,11 @@ def _render_feature_evidence_packets(packets: list[dict[str, object]]) -> list[s
                 f"- raw_frame_image: {packet['raw_frame_image']}",
                 f"- qv_overlay_frame_image: {packet['qv_overlay_frame_image']}",
                 f"- json_snippet: {packet['json_snippet']}",
+                f"- evaluation_scope: {packet.get('evaluation_scope', {})}",
                 "",
             ]
         )
     return lines
-
-
-def _review_cues(json_summary: str, focus_feature: str) -> list[str]:
-    """Lift compact json_summary hints into explicit review obligations."""
-    cues: list[str] = []
-    selected = _selected_focus_features(focus_feature)
-    if "OD" in selected:
-        if "OD_heading_samples=" in json_summary:
-            cues.append(
-                "OD_heading_samples is present. Explicitly evaluate DEF-OD-HEADING: OD / Heading Angle before clearing OD. Compare the visible travel direction in the raw frame with the BEV/VCS object orientation; if a straight-driving vehicle is output with a visibly rotated or wrong BEV heading, trigger DEF-OD-HEADING even when the bbox-fit issue is also present."
-            )
-        if "OD_bbox_overlap_candidates=" in json_summary:
-            cues.append(
-                "OD_bbox_overlap_candidates is present. Create one candidate_adjudication per pair for DEF-OD-BBOX-DUP. Judge each pair using raw, ICS, BEV/VCS, and JSON together. ICS/image overlap is only a review cue, never sufficient evidence for duplication. Mark issue only when raw scene and BEV/VCS support the same physical object or same world-space location being output twice. If the objects are visually different, naturally overlap by perspective, or BEV/VCS separates them, clear that pair."
-            )
-        if "OD_large_bbox_candidates=" in json_summary:
-            cues.append(
-                "OD_large_bbox_candidates is present. Explicitly evaluate DEF-OD-BBOX-FIT: OD / Bounding box fit before clearing OD. Large image coverage is only a review cue, never sufficient evidence for a bbox-fit issue. Clear the candidate when the object is a near-field large vehicle/object, partially out of image, or otherwise expected to occupy a large image area unless raw/QV geometry visibly extends beyond the real object shape. If the bad fit is caused by a rotated projection or wrong object orientation, also evaluate and trigger DEF-OD-HEADING instead of reporting only BBOX-FIT."
-            )
-    if "RBD" in selected and "road_edges=0" in json_summary:
-        cues.append(
-            "road_edges=0. If the raw/QV frame shows a road edge or boundary that should be output, evaluate DEF-LD-RBD-FN for RBD."
-        )
-    if "RBD" in selected and "RBD_low_road_edge_count=" in json_summary:
-        cues.append(
-            "RBD_low_road_edge_count is present. Explicitly evaluate DEF-LD-RBD-FN and DEF-LD-RBD-RANGE for RBD before clearing RBD. A single road-edge output can still be a partial miss when the raw/QV frame shows both a left/right drivable boundary or a central divider plus road edge."
-        )
-    if not cues:
-        return ["No compact JSON anomaly cue was detected; still scan every listed DEF-* issue type before assigning pass/fail."]
-    cues.append("Do not summarize these cues away; mention the applicable DEF-* item in observed_evidence or inference.")
-    return cues
-
-
-def _selected_focus_features(focus_feature: str) -> set[str]:
-    normalized = normalize_review_features(focus_feature)
-    if normalized == "ALL":
-        return {"OD", "LD", "RBD", "TS", "TL"}
-    return set(normalized.split(","))
 
 
 def _render_feature_review_contexts(contexts: list[dict[str, object]]) -> list[str]:
@@ -343,34 +258,6 @@ def _render_feature_review_contexts(contexts: list[dict[str, object]]) -> list[s
                 "",
                 "Must not:",
                 *_bullet_lines(context["must_not"]),
-                "",
-            ]
-        )
-    return lines
-
-
-def _render_candidate_evidence_packets(packets: list[dict[str, object]]) -> list[str]:
-    if not packets:
-        return ["- No candidate-specific packet generated for this package."]
-    lines: list[str] = []
-    for packet in packets:
-        lines.extend(
-            [
-                f"### {packet['candidate_id']}",
-                "",
-                f"- feature: {packet['feature']}",
-                f"- issue_type: {packet['issue_type']}",
-                f"- object_ids: {packet['object_ids']}",
-                f"- source: {packet['source']}",
-                f"- packet_markdown: {packet['packet_markdown']}",
-                f"- raw_frame_image: {packet['raw_frame_image']}",
-                f"- qv_overlay_frame_image: {packet['qv_overlay_frame_image']}",
-                f"- ics_crop_image: {packet['ics_crop_image']}",
-                f"- ics_crop_status: {packet['ics_crop_status']}",
-                f"- bev_crop_image: {packet['bev_crop_image']}",
-                f"- bev_crop_status: {packet['bev_crop_status']}",
-                f"- candidate_json_values: {packet['candidate_json_values']}",
-                f"- candidate_review_summary: {packet.get('candidate_review_summary', '')}",
                 "",
             ]
         )

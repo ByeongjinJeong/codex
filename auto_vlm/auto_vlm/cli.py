@@ -7,7 +7,6 @@ from datetime import datetime
 from pathlib import Path
 
 from auto_vlm.pipeline.engine import run_excel_batch
-from auto_vlm.pipeline.run_inspector import format_run_inspection, inspect_run_dir
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,36 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional llm_review_results.json path. Defaults to <output>/llm_review_results.json when present.",
     )
     run_parser.add_argument(
-        "--feature-responses",
-        help=(
-            "Optional manual feature response directory using "
-            "<root>/<package_id>/<feature>.json. Responses are copied into model/responses "
-            "and merged into llm_review_results.json."
-        ),
-    )
-    run_parser.add_argument(
         "--reuse-existing-artifacts",
         action="store_true",
         help="Reuse existing frame/context image artifacts when present and regenerate reports/manifests.",
-    )
-    run_parser.add_argument(
-        "--reuse-feature-responses",
-        action="store_true",
-        help="Reuse existing model/responses artifacts and merge them without provider/manual execution.",
-    )
-    run_parser.add_argument(
-        "--retry-failed-feature-reviews",
-        action="store_true",
-        help="When running feature responses, rerun only responses that are missing or not marked validation_status=valid.",
-    )
-    inspect_parser = subparsers.add_parser(
-        "inspect-run",
-        help="Inspect a run directory and print the mandatory final report checklist.",
-    )
-    inspect_parser.add_argument(
-        "--run-dir",
-        required=True,
-        help="Run directory containing manifest.json and generated artifacts.",
     )
     return parser
 
@@ -95,20 +67,16 @@ def main(argv: list[str] | None = None) -> int:
             args.input,
             output_dir,
             review_results_path=args.review_results,
-            feature_responses_path=args.feature_responses,
             reuse_existing_artifacts=args.reuse_existing_artifacts,
-            reuse_feature_responses=args.reuse_feature_responses,
-            retry_failed_feature_reviews=args.retry_failed_feature_reviews,
         )
-        print("stages: input,evidence,review_tasks,feature_vlm_review,feature_result_validation,cross_feature_audit,reports")
         if result.result_xlsx:
             print(f"result_xlsx: {result.result_xlsx}")
         else:
-            print("result_xlsx: not_generated_review_results_missing")
+            print("result_xlsx: pipeline_incomplete_review_results_missing")
         if result.summary_html:
             print(f"summary_html: {result.summary_html}")
         else:
-            print("summary_html: not_generated_review_results_missing")
+            print("summary_html: pipeline_incomplete_review_results_missing")
         print(f"manifest_json: {result.manifest_json}")
         if result.review_tasks_json:
             print(f"review_tasks: {result.review_tasks_json}")
@@ -117,28 +85,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"review_quality_status: {result.review_quality.status}")
         print(f"review_quality_errors: {len(result.review_quality.errors)}")
         print(f"review_quality_warnings: {len(result.review_quality.warnings)}")
-        if result.feature_review:
-            print(f"feature_review_tasks: {result.feature_review.tasks_total}")
-            print(f"feature_review_responses: {result.feature_review.responses_total}")
-            print(f"feature_review_retryable_failures: {len(result.feature_review.retryable_failures)}")
-            print(f"feature_review_non_retryable_failures: {len(result.feature_review.non_retryable_failures)}")
-        print(f"cross_feature_audit_conflicts: {result.cross_feature_audit.conflicts}")
-        print(f"cross_feature_audit_rerun_required: {result.cross_feature_audit.rerun_required}")
         print(f"packages: {len(result.packages)}")
         print(f"review_results: {len(result.review_results)}")
         print(f"errors: {len(result.errors)}")
         print(f"reused_artifact_packages: {result.reused_artifact_packages}")
         print(f"generated_artifact_packages: {result.generated_artifact_packages}")
-        return 0 if result.packages else 1
-
-    if args.command == "inspect-run":
-        try:
-            inspection = inspect_run_dir(args.run_dir)
-        except ValueError as exc:
-            print(f"inspect_run_error: {exc}")
-            return 1
-        print(format_run_inspection(inspection))
-        return 0 if inspection.is_final_ready else 1
+        pipeline_complete = (
+            bool(result.packages)
+            and not result.errors
+            and result.result_xlsx is not None
+            and result.summary_html is not None
+            and result.review_quality.status == "passed"
+        )
+        return 0 if pipeline_complete else 1
 
     parser.print_help()
     return 0

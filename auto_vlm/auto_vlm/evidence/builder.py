@@ -28,6 +28,7 @@ def build_frame_evidence_package(
     raw_video_metadata: VideoMetadata | None = None,
     json_snippet: str | Path | None = None,
     json_summary: str | None = None,
+    evaluation_scope: dict | None = None,
     context_offsets: tuple[int, ...] = DEFAULT_CONTEXT_OFFSETS,
     sampling_mode: str | None = None,
 ) -> FrameEvidencePackage:
@@ -58,6 +59,7 @@ def build_frame_evidence_package(
         frame_metadata=case.frame_metadata,
         json_snippet=Path(json_snippet) if json_snippet else None,
         json_summary=json_summary,
+        evaluation_scope=evaluation_scope or {},
         context_offsets=context_offsets,
         sampling_mode=sampling_mode,
         output_paths={

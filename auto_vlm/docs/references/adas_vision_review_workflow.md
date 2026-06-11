@@ -31,7 +31,7 @@ cross-checks for GT-less single-frame review.
 - Compare object class, ID/role, ICS bbox/image projection, BEV position,
   long/lat, heading, distance, motion, and JSON summary.
 - For DEF-OD-BBOX-DUP, compare both ICS/image boxes and BEV/world-space boxes;
-  do not clear an overlap candidate from the ICS view alone.
+  do not clear apparent overlap from the ICS view alone.
 - Classify only observed object symptoms after considering every OD issue
   family, not only FN/FP or coarse bbox location.
 
@@ -78,4 +78,3 @@ cross-checks for GT-less single-frame review.
 - Do not treat weak evidence as confirmed SW issue.
 - Do not clear a feature only because the ICS/image overlay looks correct;
   inspect BEV/world-space and JSON physical values for applicable issue types.
-

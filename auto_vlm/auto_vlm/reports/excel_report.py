@@ -8,13 +8,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from auto_vlm.models.evidence import FrameEvidencePackage
-from auto_vlm.models.results import PackageReviewResult
+from auto_vlm.models.results import FrameTestResult, PackageReviewResult
 from auto_vlm.reports.korean_text import (
-    candidate_adjudications_text,
     feature_inference,
     feature_observed_evidence,
     feature_summary,
-    feature_uncertainty,
 )
 from auto_vlm.utils.errors import ToolError
 
@@ -41,7 +39,6 @@ RESULT_COLUMNS = [
     "evaluated_issue_types",
     "observed_evidence",
     "inference",
-    "uncertainty",
     "json_summary",
     "evidence_image",
     "context_image",
@@ -79,7 +76,6 @@ FEATURE_RESULT_COLUMNS = [
     "summary",
     "observed_evidence",
     "inference",
-    "uncertainty",
     "ics_crop_image",
     "bev_crop_image",
     "raw_frame_image",
@@ -132,10 +128,9 @@ def _feature_result_row(package: FrameEvidencePackage, feature_result) -> list[o
         feature_result.confidence.value,
         ", ".join(feature_result.triggered_issue_types),
         ", ".join(feature_result.evaluated_issue_types),
-        feature_summary(package, feature_result),
+        "" if feature_result.result == FrameTestResult.PASS else feature_summary(package, feature_result),
         feature_observed_evidence(package, feature_result),
         feature_inference(package, feature_result),
-        feature_uncertainty(package, feature_result),
         _feature_packet_path(package, feature_result.feature, "ics_crop_image"),
         _feature_packet_path(package, feature_result.feature, "bev_crop_image"),
         str(package.raw_frame_image) if package.raw_frame_image else "",
@@ -173,7 +168,6 @@ def _package_row(
         _join_issue_types(feature.evaluated_issue_types for feature in result.feature_results),
         _package_observed_evidence(package, result),
         _package_inference(package, result),
-        _package_uncertainty(package, result),
         package.json_summary or "",
         str(package.center_frame_image),
         str(package.context_image) if package.context_image else "",
@@ -240,7 +234,7 @@ def _package_summary(package: FrameEvidencePackage, result: PackageReviewResult)
     return " | ".join(
         f"{feature.feature}: {feature_summary(package, feature)}"
         for feature in result.feature_results
-        if feature_summary(package, feature)
+        if feature.result.value != "pass" and feature_summary(package, feature)
     )
 
 
@@ -262,10 +256,6 @@ def _package_inference(package: FrameEvidencePackage, result: PackageReviewResul
     return _join_feature_text(package, result, feature_inference) or result.inference
 
 
-def _package_uncertainty(package: FrameEvidencePackage, result: PackageReviewResult) -> str:
-    return _join_feature_text(package, result, feature_uncertainty) or result.uncertainty
-
-
 def _column_index(name: str) -> int:
     return RESULT_COLUMNS.index(name)
 
@@ -282,7 +272,6 @@ def _format_sheet(sheet) -> None:
         "summary",
         "observed_evidence",
         "inference",
-        "uncertainty",
         "json_summary",
         "evaluated_issue_types",
         "triggered_issue_types",
@@ -304,7 +293,6 @@ def _format_sheet(sheet) -> None:
         "input_source_path",
         "ics_crop_image",
         "bev_crop_image",
-        "candidate_evidence_artifacts",
     }
     for index, header_cell in enumerate(sheet[1], start=1):
         header = str(header_cell.value or "")
